@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %} — Analytics{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-title">Analytics</h2>
+    <p class="page-sub">Статистика и аналитика</p>
+  </div>
+  <div class="coming-soon-badge">В разработке</div>
+</div>
+
+<div class="analytics-grid">
+  <div class="analytics-stat-card">
+    <div class="stat-label">Всего материалов</div>
+    <div class="stat-value">—</div>
+    <div class="stat-sub">данные скоро появятся</div>
+  </div>
+  <div class="analytics-stat-card">
+    <div class="stat-label">Опубликовано сегодня</div>
+    <div class="stat-value">—</div>
+    <div class="stat-sub">данные скоро появятся</div>
+  </div>
+  <div class="analytics-stat-card">
+    <div class="stat-label">Активные источники</div>
+    <div class="stat-value">—</div>
+    <div class="stat-sub">данные скоро появятся</div>
+  </div>
+  <div class="analytics-stat-card">
+    <div class="stat-label">Расход API ChatGPT</div>
+    <div class="stat-value">—</div>
+    <div class="stat-sub">данные скоро появятся</div>
+  </div>
+</div>
+
+<div class="analytics-blocks">
+  {% set blocks = [
+    ('Общая статистика', 'Охват, просмотры, публикации по дням'),
+    ('Статистика по странам', 'Активность и охват по каждой стране'),
+    ('Статистика по источникам', 'Количество материалов от каждого источника'),
+    ('Telegram Analytics', 'Подписчики, просмотры, реакции по каналам'),
+    ('Расход API ChatGPT', 'Токены и стоимость по периодам'),
+    ('Популярные публикации', 'Топ материалов по охвату'),
+    ('Графики активности', 'Временные ряды публикаций и парсинга'),
+  ] %}
+  {% for title, desc in blocks %}
+  <div class="analytics-block-stub">
+    <div class="stub-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+      </svg>
+    </div>
+    <div>
+      <strong>{{ title }}</strong>
+      <span>{{ desc }}</span>
+    </div>
+    <div class="stub-label">Скоро</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
