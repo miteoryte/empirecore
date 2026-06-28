@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block title %} — Parser{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-title">Parser</h2>
+    <p class="page-sub">{{ news|length }} материал{{ 'ов' if news|length != 1 else '' }} найдено</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-ghost" onclick="runParser()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-7.78"/>
+      </svg>
+      Запустить
+    </button>
+    <button class="btn btn-primary" onclick="bulkPublish()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+      </svg>
+      Опубликовать
+    </button>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filters-bar">
+  <form method="GET" id="filtersForm" class="filters-form">
+    <div class="filter-group">
+      <select name="country" onchange="this.form.submit()" class="filter-select">
+        <option value="">Все страны</option>
+        {% for c in countries %}
+        <option value="{{ c }}" {% if filters.country == c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <select name="source" onchange="this.form.submit()" class="filter-select">
+        <option value="">Все источники</option>
+        {% for s in sources %}
+        <option value="{{ s }}" {% if filters.source == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <select name="category" onchange="this.form.submit()" class="filter-select">
+        <option value="">Все категории</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}" {% if filters.category == cat %}selected{% endif %}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="filter-group">
+      <select name="status" onchange="this.form.submit()" class="filter-select">
+        <option value="">Все статусы</option>
+        <option value="new" {% if filters.status == 'new' %}selected{% endif %}>Новая</option>
+        <option value="ready" {% if filters.status == 'ready' %}selected{% endif %}>Готова</option>
+        <option value="draft" {% if filters.status == 'draft' %}selected{% endif %}>Черновик</option>
+        <option value="published" {% if filters.status == 'published' %}selected{% endif %}>Опубликована</option>
+        <option value="rejected" {% if filters.status == 'rejected' %}selected{% endif %}>Отклонена</option>
+      </select>
+    </div>
+    {% if filters.country or filters.source or filters.category or filters.status %}
+    <a href="{{ url_for('parser') }}" class="btn btn-ghost btn-sm">Сбросить</a>
+    {% endif %}
+  </form>
+
+  <div class="bulk-actions" id="bulkBar" style="display:none;">
+    <span class="bulk-count" id="bulkCount">0 выбрано</span>
+    <button class="btn btn-sm btn-ghost" onclick="bulkAction('publish')">Опубликовать</button>
+    <button class="btn btn-sm btn-ghost" onclick="bulkAction('reject')">Отклонить</button>
+    <button class="btn btn-sm btn-ghost" onclick="bulkAction('regenerate')">Перегенерировать</button>
+    <button class="btn btn-sm btn-danger" onclick="bulkAction('delete')">Удалить</button>
+  </div>
+</div>
+
+<!-- News list -->
+<div class="news-list">
+  {% if not news %}
+  <div class="empty-state">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.2">
+      <path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/>
+      <polyline points="14 2 14 8 20 8"/><path d="M3 15h6"/><path d="M6 12v6"/>
+    </svg>
+    <p>Нет материалов с выбранными фильтрами</p>
+    <a href="{{ url_for('parser') }}" class="btn btn-ghost btn-sm">Сбросить фильтры</a>
+  </div>
+  {% endif %}
+
+  {% for item in news %}
+  <div class="news-card" id="card-{{ item.id }}">
+    <div class="card-select">
+      <input type="checkbox" class="news-checkbox" value="{{ item.id }}" onchange="updateBulk()">
+    </div>
+
+    <div class="card-body">
+      <div class="card-meta">
+        <span class="source-badge">{{ item.source }}</span>
+        <span class="country-tag">{{ item.country }}</span>
+        <span class="category-tag">{{ item.category }}</span>
+        <span class="status-badge status-{{ item.status }}">
+          {% if item.status == 'new' %}Новая
+          {% elif item.status == 'ready' %}Готова
+          {% elif item.status == 'draft' %}Черновик
+          {% elif item.status == 'published' %}Опубликована
+          {% elif item.status == 'rejected' %}Отклонена
+          {% endif %}
+        </span>
+        <span class="time-tag">{{ item.published_at }}</span>
+      </div>
+
+      <div class="card-content">
+        <div class="card-text">
+          <h3 class="card-title">{{ item.generated_title }}</h3>
+          <p class="card-original">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <a href="{{ item.original_url }}" target="_blank">{{ item.original_title }}</a>
+          </p>
+          <p class="card-excerpt">{{ item.generated_text[:200] }}{% if item.generated_text|length > 200 %}...{% endif %}</p>
+        </div>
+      </div>
+
+      <!-- Expanded editor -->
+      <div class="card-editor" id="editor-{{ item.id }}" style="display:none;">
+        <div class="editor-field">
+          <label>Заголовок</label>
+          <input type="text" class="editor-input" value="{{ item.generated_title }}" id="title-{{ item.id }}">
+        </div>
+        <div class="editor-field">
+          <label>Текст</label>
+          <textarea class="editor-textarea" id="text-{{ item.id }}" rows="6">{{ item.generated_text }}</textarea>
+        </div>
+        <div class="editor-field">
+          <label>Изображение</label>
+          <input type="text" class="editor-input" placeholder="URL изображения или загрузить файл">
+        </div>
+      </div>
+
+      <div class="card-actions">
+        <button class="btn btn-sm btn-ghost" onclick="toggleEditor({{ item.id }})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          Редактировать
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick="newsAction({{ item.id }}, 'regenerate')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-7.78"/>
+          </svg>
+          Перегенерировать
+        </button>
+        <button class="btn btn-sm btn-ghost" onclick="newsAction({{ item.id }}, 'draft')">Черновик</button>
+        <button class="btn btn-sm btn-danger-ghost" onclick="newsAction({{ item.id }}, 'reject')">Отклонить</button>
+        <button class="btn btn-sm btn-primary" onclick="newsAction({{ item.id }}, 'publish')">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+          Опубликовать
+        </button>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleEditor(id) {
+  const ed = document.getElementById('editor-' + id);
+  ed.style.display = ed.style.display === 'none' ? 'block' : 'none';
+}
+
+function newsAction(id, action) {
+  const labels = {publish: 'Опубликовано', draft: 'Сохранено как черновик', reject: 'Отклонено', regenerate: 'Отправлено на перегенерацию'};
+  fetch('/api/news/' + id + '/action', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action})
+  }).then(() => showToast(labels[action] || 'Готово'));
+}
+
+function updateBulk() {
+  const checked = document.querySelectorAll('.news-checkbox:checked');
+  const bar = document.getElementById('bulkBar');
+  const count = document.getElementById('bulkCount');
+  bar.style.display = checked.length > 0 ? 'flex' : 'none';
+  count.textContent = checked.length + ' выбрано';
+}
+
+function bulkAction(action) {
+  const ids = [...document.querySelectorAll('.news-checkbox:checked')].map(c => c.value);
+  showToast('Действие "' + action + '" применено к ' + ids.length + ' материалам');
+}
+
+function runParser() {
+  showToast('Парсер запущен...');
+}
+
+function bulkPublish() {
+  showToast('Выберите материалы для публикации');
+}
+</script>
+{% endblock %}

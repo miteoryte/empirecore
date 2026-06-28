@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EmpireCore — Вход</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="login-body">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="logo-icon large">
+          <svg width="28" height="28" viewBox="0 0 22 22" fill="none">
+            <rect x="1" y="1" width="9" height="9" rx="2" fill="var(--accent)"/>
+            <rect x="12" y="1" width="9" height="9" rx="2" fill="var(--accent)" opacity="0.5"/>
+            <rect x="1" y="12" width="9" height="9" rx="2" fill="var(--accent)" opacity="0.5"/>
+            <rect x="12" y="12" width="9" height="9" rx="2" fill="var(--accent)"/>
+          </svg>
+        </div>
+        <h1>EmpireCore</h1>
+        <p>Управление Telegram-сетью</p>
+      </div>
+
+      {% if step == 1 %}
+      <form method="POST" class="login-form">
+        <input type="hidden" name="action" value="check_credentials">
+        {% if error %}
+        <div class="form-error">{{ error }}</div>
+        {% endif %}
+        <div class="form-group">
+          <label>Логин</label>
+          <input type="text" name="username" placeholder="admin" autocomplete="username" autofocus>
+        </div>
+        <div class="form-group">
+          <label>Пароль</label>
+          <input type="password" name="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Продолжить</button>
+      </form>
+      {% else %}
+      <form method="POST" class="login-form">
+        <input type="hidden" name="action" value="check_totp">
+        <div class="totp-hint">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8">
+            <rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+          </svg>
+          <span>Введите код из Google Authenticator</span>
+        </div>
+        {% if error %}
+        <div class="form-error">{{ error }}</div>
+        {% endif %}
+        <div class="form-group">
+          <label>Код 2FA</label>
+          <input type="text" name="totp_code" placeholder="000000" maxlength="6" inputmode="numeric" autofocus class="totp-input">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Войти</button>
+        <a href="{{ url_for('login') }}" class="back-link">← Назад</a>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

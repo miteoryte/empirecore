@@ -1,0 +1,257 @@
+{% extends 'base.html' %}
+{% block title %} — Map{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-title">Map</h2>
+    <p class="page-sub">Покрытие по странам Европы</p>
+  </div>
+  <div class="map-legend">
+    <span class="legend-item active"><span class="legend-dot"></span>В работе</span>
+    <span class="legend-item inactive"><span class="legend-dot"></span>Не подключено</span>
+  </div>
+</div>
+
+<div class="map-wrap">
+  <div class="map-container">
+    <!-- Europe SVG Map -->
+    <svg id="europe-map" viewBox="0 0 900 820" xmlns="http://www.w3.org/2000/svg">
+
+      <!-- Iceland -->
+      <path id="IS" d="M120,60 L155,48 L185,55 L195,70 L180,88 L155,95 L130,85 L115,72 Z" class="country"/>
+      <text x="155" y="75" class="country-label">IS</text>
+
+      <!-- Norway -->
+      <path id="NO" d="M390,50 L430,38 L470,42 L500,65 L510,100 L490,130 L460,150 L430,155 L405,140 L395,110 L380,85 Z" class="country"/>
+      <text x="445" y="100" class="country-label">NO</text>
+
+      <!-- Sweden -->
+      <path id="SE" d="M430,155 L460,150 L490,130 L510,100 L530,120 L535,160 L520,200 L500,240 L475,260 L455,250 L440,220 L430,190 Z" class="country"/>
+      <text x="478" y="195" class="country-label">SE</text>
+
+      <!-- Finland -->
+      <path id="FI" d="M510,100 L560,80 L600,90 L610,120 L600,160 L580,195 L555,210 L535,200 L520,200 L535,160 L530,120 Z" class="country"/>
+      <text x="558" y="148" class="country-label">FI</text>
+
+      <!-- Estonia -->
+      <path id="EE" d="M535,210 L575,205 L590,218 L578,232 L540,234 L530,222 Z" class="country"/>
+      <text x="558" y="222" class="country-label">EE</text>
+
+      <!-- Latvia -->
+      <path id="LV" d="M530,234 L578,232 L592,244 L585,260 L548,262 L530,250 Z" class="country"/>
+      <text x="558" y="250" class="country-label">LV</text>
+
+      <!-- Lithuania -->
+      <path id="LT" d="M530,250 L548,262 L560,278 L542,292 L518,288 L510,270 L518,255 Z" class="country"/>
+      <text x="532" y="272" class="country-label">LT</text>
+
+      <!-- Denmark -->
+      <path id="DK" d="M400,175 L425,168 L432,185 L420,200 L402,198 Z" class="country"/>
+      <text x="412" y="188" class="country-label">DK</text>
+
+      <!-- United Kingdom -->
+      <path id="GB" d="M295,135 L325,118 L348,125 L355,155 L340,178 L318,190 L298,182 L285,162 Z" class="country"/>
+      <path d="M272,200 L290,195 L298,215 L282,228 L265,220 Z" class="country" id="GB2"/>
+      <text x="318" y="158" class="country-label">GB</text>
+
+      <!-- Ireland -->
+      <path id="IE" d="M250,165 L272,158 L278,178 L265,196 L248,192 L240,178 Z" class="country"/>
+      <text x="258" y="178" class="country-label">IE</text>
+
+      <!-- Netherlands -->
+      <path id="NL" d="M368,198 L390,192 L398,210 L385,222 L365,218 Z" class="country"/>
+      <text x="378" y="210" class="country-label">NL</text>
+
+      <!-- Belgium -->
+      <path id="BE" d="M355,218 L385,222 L390,240 L368,248 L350,238 Z" class="country"/>
+      <text x="368" y="235" class="country-label">BE</text>
+
+      <!-- Luxembourg -->
+      <path id="LU" d="M375,248 L385,245 L388,258 L376,260 Z" class="country"/>
+
+      <!-- France -->
+      <path id="FR" d="M290,240 L340,225 L368,248 L390,240 L405,268 L410,310 L385,338 L350,352 L310,338 L285,308 L278,275 Z" class="country"/>
+      <text x="340" y="295" class="country-label">FR</text>
+
+      <!-- Spain -->
+      <path id="ES" d="M240,335 L290,318 L310,338 L320,370 L310,412 L278,435 L240,440 L205,425 L188,395 L192,360 L215,338 Z" class="country"/>
+      <text x="255" y="385" class="country-label">ES</text>
+
+      <!-- Portugal -->
+      <path id="PT" d="M188,355 L210,348 L215,338 L192,360 L188,395 L175,400 L168,378 Z" class="country"/>
+      <text x="185" y="375" class="country-label">PT</text>
+
+      <!-- Germany -->
+      <path id="DE" d="M390,192 L430,188 L455,200 L460,230 L448,260 L420,272 L395,265 L375,248 L385,222 L398,210 Z" class="country"/>
+      <text x="420" y="232" class="country-label">DE</text>
+
+      <!-- Poland -->
+      <path id="PL" d="M455,200 L510,196 L530,210 L530,250 L518,255 L510,270 L488,278 L460,270 L448,260 L460,230 Z" class="country"/>
+      <text x="490" y="238" class="country-label">PL</text>
+
+      <!-- Czech Republic -->
+      <path id="CZ" d="M420,272 L448,260 L460,270 L458,290 L435,298 L415,288 Z" class="country"/>
+      <text x="436" y="282" class="country-label">CZ</text>
+
+      <!-- Slovakia -->
+      <path id="SK" d="M460,270 L488,278 L500,285 L495,298 L468,302 L458,290 Z" class="country"/>
+      <text x="476" y="290" class="country-label">SK</text>
+
+      <!-- Austria -->
+      <path id="AT" d="M395,288 L415,288 L435,298 L458,290 L468,302 L455,315 L428,320 L400,312 L390,298 Z" class="country"/>
+      <text x="428" y="308" class="country-label">AT</text>
+
+      <!-- Switzerland -->
+      <path id="CH" d="M375,280 L395,275 L405,290 L395,305 L372,302 L365,290 Z" class="country"/>
+      <text x="382" y="292" class="country-label">CH</text>
+
+      <!-- Italy -->
+      <path id="IT" d="M370,318 L400,312 L428,320 L442,342 L448,375 L438,410 L418,440 L405,460 L395,445 L388,415 L398,385 L385,358 L365,338 Z" class="country"/>
+      <!-- boot -->
+      <path d="M418,440 L435,448 L450,462 L438,475 L420,468 L405,460 Z" class="country" id="IT2"/>
+      <text x="408" y="380" class="country-label">IT</text>
+
+      <!-- Slovenia -->
+      <path id="SI" d="M428,320 L455,315 L462,328 L442,338 L428,332 Z" class="country"/>
+      <text x="442" y="329" class="country-label">SI</text>
+
+      <!-- Croatia -->
+      <path id="HR" d="M442,338 L462,328 L480,335 L488,355 L470,370 L452,375 L442,360 Z" class="country"/>
+      <text x="462" y="352" class="country-label">HR</text>
+
+      <!-- Hungary -->
+      <path id="HU" d="M468,302 L495,298 L520,305 L525,325 L505,340 L480,345 L462,335 L462,318 Z" class="country"/>
+      <text x="490" y="322" class="country-label">HU</text>
+
+      <!-- Romania -->
+      <path id="RO" d="M520,305 L560,298 L585,310 L592,340 L578,365 L550,375 L522,368 L505,350 L505,340 L525,325 Z" class="country"/>
+      <text x="548" y="338" class="country-label">RO</text>
+
+      <!-- Serbia -->
+      <path id="RS" d="M480,345 L505,340 L505,350 L498,372 L480,382 L462,375 L462,358 Z" class="country"/>
+      <text x="482" y="362" class="country-label">RS</text>
+
+      <!-- Bosnia -->
+      <path id="BA" d="M452,360 L470,370 L478,385 L465,398 L448,392 L445,375 Z" class="country"/>
+      <text x="458" y="382" class="country-label">BA</text>
+
+      <!-- Montenegro -->
+      <path id="ME" d="M462,388 L478,385 L480,398 L468,405 L458,400 Z" class="country"/>
+
+      <!-- North Macedonia -->
+      <path id="MK" d="M480,398 L500,392 L508,405 L495,418 L478,415 Z" class="country"/>
+
+      <!-- Albania -->
+      <path id="AL" d="M468,405 L480,398 L478,415 L475,432 L460,432 L458,415 Z" class="country"/>
+
+      <!-- Bulgaria -->
+      <path id="BG" d="M522,368 L550,375 L558,392 L540,412 L515,415 L498,405 L500,392 L508,378 Z" class="country"/>
+      <text x="525" y="395" class="country-label">BG</text>
+
+      <!-- Greece -->
+      <path id="GR" d="M478,432 L495,425 L515,430 L525,450 L515,475 L495,488 L478,480 L468,462 L465,445 Z" class="country"/>
+      <text x="492" y="460" class="country-label">GR</text>
+
+      <!-- Moldova -->
+      <path id="MD" d="M560,298 L578,295 L585,310 L575,322 L562,318 Z" class="country"/>
+
+      <!-- Ukraine -->
+      <path id="UA" d="M530,250 L560,245 L615,242 L650,255 L665,278 L655,308 L625,318 L592,322 L585,310 L560,298 L520,305 L510,288 L518,268 Z" class="country"/>
+      <text x="590" y="282" class="country-label">UA</text>
+
+      <!-- Belarus -->
+      <path id="BY" d="M530,210 L575,205 L610,210 L620,232 L615,242 L560,245 L530,250 L518,238 L518,225 Z" class="country"/>
+      <text x="570" y="228" class="country-label">BY</text>
+
+      <!-- Kaliningrad (Russia) -->
+      <path id="RU_K" d="M490,218 L510,215 L512,228 L495,232 L488,222 Z" class="country"/>
+
+      <!-- Turkey (European part) -->
+      <path id="TR" d="M540,450 L570,440 L600,445 L612,462 L595,478 L565,482 L545,470 Z" class="country"/>
+      <text x="568" y="462" class="country-label">TR</text>
+
+      <!-- Cyprus -->
+      <path id="CY" d="M605,508 L628,502 L640,510 L632,522 L608,520 Z" class="country"/>
+
+      <!-- Malta -->
+      <path id="MT" d="M400,500 L410,496 L415,506 L404,510 Z" class="country"/>
+
+    </svg>
+
+    <!-- Country tooltip -->
+    <div id="map-tooltip" class="map-tooltip" style="display:none;"></div>
+  </div>
+
+  <!-- Country list sidebar -->
+  <div class="map-sidebar">
+    <h4>Страны в работе</h4>
+    <div id="active-countries-list">
+      {% if active_codes %}
+        <p class="map-sidebar-hint">Загрузка...</p>
+      {% else %}
+        <p class="map-sidebar-hint">Нет активных стран.<br>Добавьте страны в <a href="{{ url_for('settings') }}?tab=countries">Settings → Страны</a></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const activeCodes = {{ active_codes | tojson }};
+
+const countryNames = {
+  IS:'Исландия', NO:'Норвегия', SE:'Швеция', FI:'Финляндия',
+  EE:'Эстония', LV:'Латвия', LT:'Литва', DK:'Дания',
+  GB:'Великобритания', IE:'Ирландия', NL:'Нидерланды', BE:'Бельгия',
+  LU:'Люксембург', FR:'Франция', ES:'Испания', PT:'Португалия',
+  DE:'Германия', PL:'Польша', CZ:'Чехия', SK:'Словакия',
+  AT:'Австрия', CH:'Швейцария', IT:'Италия', SI:'Словения',
+  HR:'Хорватия', HU:'Венгрия', RO:'Румыния', RS:'Сербия',
+  BA:'Босния', ME:'Черногория', MK:'Сев. Македония', AL:'Албания',
+  BG:'Болгария', GR:'Греция', MD:'Молдова', UA:'Украина',
+  BY:'Беларусь', TR:'Турция', CY:'Кипр', MT:'Мальта'
+};
+
+// Colour countries
+document.querySelectorAll('#europe-map path').forEach(el => {
+  const code = el.id.replace('2','');
+  if (activeCodes.includes(code)) {
+    el.classList.add('country-active');
+  }
+});
+
+// Tooltip
+const tooltip = document.getElementById('map-tooltip');
+document.querySelectorAll('#europe-map path').forEach(el => {
+  el.addEventListener('mouseenter', e => {
+    const code = el.id.replace('2','');
+    const name = countryNames[code] || code;
+    const isActive = activeCodes.includes(code);
+    tooltip.textContent = name + (isActive ? ' ✓' : '');
+    tooltip.className = 'map-tooltip ' + (isActive ? 'tip-active' : 'tip-inactive');
+    tooltip.style.display = 'block';
+  });
+  el.addEventListener('mousemove', e => {
+    const rect = document.querySelector('.map-container').getBoundingClientRect();
+    tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
+    tooltip.style.top = (e.clientY - rect.top - 10) + 'px';
+  });
+  el.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+});
+
+// Fill sidebar list
+const listEl = document.getElementById('active-countries-list');
+if (activeCodes.length > 0) {
+  listEl.innerHTML = activeCodes.map(code =>
+    `<div class="map-country-item">
+      <span class="map-dot-active"></span>
+      <span>${countryNames[code] || code}</span>
+     </div>`
+  ).join('');
+} else {
+  listEl.innerHTML = '<p class="map-sidebar-hint">Нет активных стран.<br>Добавьте страны в <a href="/settings?tab=countries">Settings → Страны</a></p>';
+}
+</script>
+{% endblock %}

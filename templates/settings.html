@@ -1,0 +1,468 @@
+{% extends 'base.html' %}
+{% block title %} — Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-title">Settings</h2>
+    <p class="page-sub">Конфигурация системы</p>
+  </div>
+</div>
+
+<div class="settings-layout">
+  <div class="settings-tabs">
+    {% set tabs = [
+      ('countries','Страны','M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'),
+      ('sources','Источники','M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4'),
+      ('chatgpt','ChatGPT','M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z'),
+      ('prompt','Промпт','M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'),
+      ('telegram','Telegram','M22 2L11 13'),
+      ('automation','Автоматизация','M13 2L3 14h9l-1 8 10-12h-9l1-8z'),
+      ('dedup','Антидубликаты','M22 11.08V12a10 10 0 1 1-5.93-9.14'),
+    ] %}
+    {% for tid,tname,ticon in tabs %}
+    <a href="?tab={{ tid }}" class="settings-tab {% if active_tab==tid %}active{% endif %}">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="{{ ticon }}"/></svg>
+      {{ tname }}
+    </a>
+    {% endfor %}
+  </div>
+
+  <div class="settings-panel">
+
+    {# ===== COUNTRIES ===== #}
+    {% if active_tab == 'countries' %}
+    <div class="panel-header">
+      <h3>Страны</h3>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-country')">+ Добавить</button>
+    </div>
+    <table class="data-table" id="countries-table">
+      <thead><tr><th>Название</th><th>Язык</th><th>Telegram-канал</th><th>Код карты</th><th></th></tr></thead>
+      <tbody>
+        {% for c in countries %}
+        <tr id="country-row-{{ c.id }}">
+          <td><strong>{{ c.name }}</strong></td>
+          <td><code class="lang-tag">{{ c.language }}</code></td>
+          <td><span class="channel-tag">{{ c.telegram_channel or '—' }}</span></td>
+          <td><code class="lang-tag">{{ c.map_code or '—' }}</code></td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-ghost" onclick='editCountry({{ c.id }}, {{ c.name|tojson }}, {{ c.language|tojson }}, {{ (c.telegram_channel or "")|tojson }}, {{ (c.map_code or "")|tojson }})'>Изменить</button>
+            <button class="btn btn-xs btn-danger-ghost" onclick="deleteCountry({{ c.id }})">Удалить</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty-cell">Нет стран. Добавьте первую.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {# ===== SOURCES ===== #}
+    {% elif active_tab == 'sources' %}
+    <div class="panel-header">
+      <h3>Источники</h3>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-source')">+ Добавить</button>
+    </div>
+    <table class="data-table" id="sources-table">
+      <thead><tr><th>Название / RSS</th><th>Страна</th><th>Категория</th><th>Интервал</th><th>Макс.</th><th>Вкл</th><th></th></tr></thead>
+      <tbody>
+        {% for s in sources %}
+        <tr id="source-row-{{ s.id }}">
+          <td>
+            <strong>{{ s.name }}</strong>
+            <div class="sub-text">{{ s.rss_url[:50] }}{% if s.rss_url|length > 50 %}…{% endif %}</div>
+          </td>
+          <td>{{ s.country_name or '—' }}</td>
+          <td>{{ s.category }}</td>
+          <td>{{ s.interval_min }} мин</td>
+          <td>{{ s.max_news }}</td>
+          <td>
+            <label class="toggle">
+              <input type="checkbox" {% if s.enabled %}checked{% endif %} onchange="toggleSource({{ s.id }}, this)">
+              <span class="toggle-slider"></span>
+            </label>
+          </td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-ghost" onclick='editSource({{ s.id }}, {{ s.name|tojson }}, {{ s.url|tojson }}, {{ s.rss_url|tojson }}, {{ (s.country_id or "")|tojson }}, {{ s.category|tojson }}, {{ s.interval_min }}, {{ s.max_news }})'>Изменить</button>
+            <button class="btn btn-xs btn-danger-ghost" onclick="deleteSource({{ s.id }})">Удалить</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty-cell">Нет источников. Добавьте первый.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {# ===== CHATGPT ===== #}
+    {% elif active_tab == 'chatgpt' %}
+    <div class="panel-header"><h3>ChatGPT API</h3></div>
+    <div class="form-stack">
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="password" id="gpt-key" class="form-input" value="{{ cfg.get('chatgpt_api_key','') }}" placeholder="sk-...">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Модель</label>
+          <select id="gpt-model" class="form-input">
+            {% for m in ['gpt-4o','gpt-4o-mini','gpt-4-turbo','gpt-3.5-turbo'] %}
+            <option {% if cfg.get('chatgpt_model','gpt-4o')==m %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Temperature <span class="form-hint" id="temp-val">{{ cfg.get('chatgpt_temperature','0.7') }}</span></label>
+          <input type="range" min="0" max="2" step="0.1" value="{{ cfg.get('chatgpt_temperature','0.7') }}"
+            class="form-range" oninput="document.getElementById('temp-val').textContent=this.value" id="gpt-temp">
+        </div>
+        <div class="form-group">
+          <label>Max Tokens</label>
+          <input type="number" id="gpt-tokens" class="form-input" value="{{ cfg.get('chatgpt_max_tokens','1000') }}">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveChatGPT()">Сохранить</button>
+    </div>
+
+    {# ===== PROMPT ===== #}
+    {% elif active_tab == 'prompt' %}
+    <div class="panel-header"><h3>Промпт для генерации</h3></div>
+    <div class="form-stack">
+      <div class="prompt-hint">Этот промпт используется при каждой генерации статьи. После изменения вы можете перегенерировать любую новость в Parser.</div>
+      <div class="form-group">
+        <textarea id="prompt-text" class="form-input prompt-textarea" rows="14">{{ cfg.get('prompt','') }}</textarea>
+      </div>
+      <button class="btn btn-primary" onclick="savePrompt()">Сохранить промпт</button>
+    </div>
+
+    {# ===== TELEGRAM ===== #}
+    {% elif active_tab == 'telegram' %}
+    <div class="panel-header">
+      <h3>Telegram-каналы</h3>
+      <button class="btn btn-primary btn-sm" onclick="openModal('modal-telegram')">+ Добавить</button>
+    </div>
+    <table class="data-table" id="telegram-table">
+      <thead><tr><th>Название</th><th>Chat ID</th><th>Страна</th><th>Статус</th><th></th></tr></thead>
+      <tbody>
+        {% for t in telegram %}
+        <tr id="tg-row-{{ t.id }}">
+          <td><strong>{{ t.name }}</strong></td>
+          <td><code class="lang-tag">{{ t.chat_id }}</code></td>
+          <td>{{ t.country_name or '—' }}</td>
+          <td><span class="status-dot {% if t.status=='connected' %}connected{% else %}error{% endif %}">{{ 'Подключён' if t.status=='connected' else 'Ошибка' }}</span></td>
+          <td class="actions-cell">
+            <button class="btn btn-xs btn-danger-ghost" onclick="deleteTelegram({{ t.id }})">Удалить</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="empty-cell">Нет каналов. Добавьте первый.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {# ===== AUTOMATION ===== #}
+    {% elif active_tab == 'automation' %}
+    <div class="panel-header"><h3>Автоматизация</h3></div>
+    <div class="form-stack">
+      <div class="toggle-row">
+        <div class="toggle-info"><strong>Автозапуск парсера</strong><span>Парсить источники автоматически по расписанию</span></div>
+        <label class="toggle"><input type="checkbox" id="auto-parse" {% if cfg.get('auto_parse')=='true' %}checked{% endif %}><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><strong>Авто-отправка в ChatGPT</strong><span>Автоматически обрабатывать новые материалы</span></div>
+        <label class="toggle"><input type="checkbox" id="auto-chatgpt" {% if cfg.get('auto_chatgpt')=='true' %}checked{% endif %}><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><strong>Автосоздание черновиков</strong><span>После обработки ChatGPT создавать черновик</span></div>
+        <label class="toggle"><input type="checkbox" id="auto-draft" {% if cfg.get('auto_draft')=='true' %}checked{% endif %}><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row disabled">
+        <div class="toggle-info"><strong>Автопубликация</strong><span>Пока недоступно — будет реализовано позже</span></div>
+        <label class="toggle"><input type="checkbox" disabled><span class="toggle-slider"></span></label>
+      </div>
+      <button class="btn btn-primary" onclick="saveAutomation()">Сохранить</button>
+    </div>
+
+    {# ===== DEDUP ===== #}
+    {% elif active_tab == 'dedup' %}
+    <div class="panel-header"><h3>Антидубликаты</h3></div>
+    <div class="form-stack">
+      <div class="toggle-row">
+        <div class="toggle-info"><strong>Проверка по URL</strong><span>Пропускать материалы с уже известным URL</span></div>
+        <label class="toggle"><input type="checkbox" id="dedup-url" {% if cfg.get('dedup_by_url','true')=='true' %}checked{% endif %}><span class="toggle-slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle-info"><strong>Проверка по заголовку</strong><span>Пропускать материалы с похожим заголовком</span></div>
+        <label class="toggle"><input type="checkbox" id="dedup-title" {% if cfg.get('dedup_by_title','true')=='true' %}checked{% endif %}><span class="toggle-slider"></span></label>
+      </div>
+      <button class="btn btn-primary" onclick="saveDedup()">Сохранить</button>
+    </div>
+    {% endif %}
+
+  </div><!-- /settings-panel -->
+</div><!-- /settings-layout -->
+
+<!-- ===== MODAL: ADD/EDIT COUNTRY ===== -->
+<div id="modal-country" class="modal-overlay" style="display:none" onclick="closeModalOutside(event,'modal-country')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-country-title">Добавить страну</h3>
+      <button class="modal-close" onclick="closeModal('modal-country')">✕</button>
+    </div>
+    <input type="hidden" id="c-id">
+    <div class="form-stack">
+      <div class="form-row2">
+        <div class="form-group"><label>Название *</label><input class="form-input" id="c-name" placeholder="Германия"></div>
+        <div class="form-group"><label>Язык *</label><input class="form-input" id="c-lang" placeholder="de" maxlength="5"></div>
+      </div>
+      <div class="form-group"><label>Telegram-канал</label><input class="form-input" id="c-channel" placeholder="@channel_name"></div>
+      <div class="form-group">
+        <label>Код карты (ISO 2)</label>
+        <input class="form-input" id="c-mapcode" placeholder="DE" maxlength="2">
+        <span class="field-hint">Коды: DE, FR, GB, IT, ES, PL, NL, BE, SE, NO, FI, DK, AT, CH, CZ, HU, RO, PT, GR, BG, HR, SK, SI, LT, LV, EE, UA, BY...</span>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('modal-country')">Отмена</button>
+        <button class="btn btn-primary" onclick="saveCountry()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: ADD/EDIT SOURCE ===== -->
+<div id="modal-source" class="modal-overlay" style="display:none" onclick="closeModalOutside(event,'modal-source')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-source-title">Добавить источник</h3>
+      <button class="modal-close" onclick="closeModal('modal-source')">✕</button>
+    </div>
+    <input type="hidden" id="s-id">
+    <div class="form-stack">
+      <div class="form-row2">
+        <div class="form-group"><label>Название *</label><input class="form-input" id="s-name" placeholder="BBC News"></div>
+        <div class="form-group"><label>Категория</label><input class="form-input" id="s-category" placeholder="General"></div>
+      </div>
+      <div class="form-group"><label>URL сайта</label><input class="form-input" id="s-url" placeholder="https://bbc.com"></div>
+      <div class="form-group"><label>RSS / API URL *</label><input class="form-input" id="s-rss" placeholder="https://feeds.bbci.co.uk/news/rss.xml"></div>
+      <div class="form-row2">
+        <div class="form-group">
+          <label>Страна</label>
+          <select class="form-input" id="s-country">
+            <option value="">— не выбрана —</option>
+            {% for c in countries_list %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group"><label>Интервал (мин)</label><input type="number" class="form-input" id="s-interval" value="30" min="5"></div>
+        <div class="form-group"><label>Макс. новостей</label><input type="number" class="form-input" id="s-maxnews" value="10" min="1"></div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('modal-source')">Отмена</button>
+        <button class="btn btn-primary" onclick="saveSource()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: ADD TELEGRAM ===== -->
+<div id="modal-telegram" class="modal-overlay" style="display:none" onclick="closeModalOutside(event,'modal-telegram')">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Добавить Telegram-канал</h3>
+      <button class="modal-close" onclick="closeModal('modal-telegram')">✕</button>
+    </div>
+    <div class="form-stack">
+      <div class="form-group"><label>Название *</label><input class="form-input" id="tg-name" placeholder="DE News"></div>
+      <div class="form-group"><label>Bot Token *</label><input class="form-input" id="tg-token" placeholder="123456:AABBCCxxxxx"></div>
+      <div class="form-group"><label>Chat ID *</label><input class="form-input" id="tg-chatid" placeholder="-1001234567890"></div>
+      <div class="form-group">
+        <label>Страна</label>
+        <select class="form-input" id="tg-country">
+          <option value="">— не выбрана —</option>
+          {% for c in countries_list %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal('modal-telegram')">Отмена</button>
+        <button class="btn btn-primary" onclick="saveTelegram()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ---- Modal helpers ----
+function openModal(id) { document.getElementById(id).style.display='flex'; }
+function closeModal(id) { document.getElementById(id).style.display='none'; }
+function closeModalOutside(e, id) { if(e.target.id===id) closeModal(id); }
+
+function apiPost(url, data) {
+  return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+    .then(r => r.json());
+}
+function apiPut(url, data) {
+  return fetch(url, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+    .then(r => r.json());
+}
+function apiDel(url) {
+  return fetch(url, {method:'DELETE'}).then(r => r.json());
+}
+
+// ---- Countries ----
+function editCountry(id, name, lang, channel, mapcode) {
+  document.getElementById('modal-country-title').textContent = 'Изменить страну';
+  document.getElementById('c-id').value = id;
+  document.getElementById('c-name').value = name;
+  document.getElementById('c-lang').value = lang;
+  document.getElementById('c-channel').value = channel;
+  document.getElementById('c-mapcode').value = mapcode;
+  openModal('modal-country');
+}
+
+function saveCountry() {
+  const id = document.getElementById('c-id').value;
+  const data = {
+    name: document.getElementById('c-name').value.trim(),
+    language: document.getElementById('c-lang').value.trim(),
+    telegram_channel: document.getElementById('c-channel').value.trim(),
+    map_code: document.getElementById('c-mapcode').value.trim().toUpperCase(),
+  };
+  if (!data.name) return showToast('Укажите название страны');
+  const req = id ? apiPut('/api/countries/'+id, data) : apiPost('/api/countries', data);
+  req.then(r => {
+    if (r.status === 'ok') { showToast('Сохранено'); closeModal('modal-country'); setTimeout(()=>location.reload(),600); }
+    else showToast('Ошибка: ' + r.message);
+  });
+}
+
+function deleteCountry(id) {
+  if (!confirm('Удалить страну?')) return;
+  apiDel('/api/countries/'+id).then(r => {
+    if (r.status==='ok') { document.getElementById('country-row-'+id)?.remove(); showToast('Удалено'); }
+    else showToast('Ошибка: '+r.message);
+  });
+}
+
+// ---- Sources ----
+function editSource(id, name, url, rss, countryId, category, interval, maxnews) {
+  document.getElementById('modal-source-title').textContent = 'Изменить источник';
+  document.getElementById('s-id').value = id;
+  document.getElementById('s-name').value = name;
+  document.getElementById('s-url').value = url;
+  document.getElementById('s-rss').value = rss;
+  document.getElementById('s-category').value = category;
+  document.getElementById('s-interval').value = interval;
+  document.getElementById('s-maxnews').value = maxnews;
+  const sel = document.getElementById('s-country');
+  for (let o of sel.options) if (o.value == countryId) { o.selected = true; break; }
+  openModal('modal-source');
+}
+
+function saveSource() {
+  const id = document.getElementById('s-id').value;
+  const data = {
+    name: document.getElementById('s-name').value.trim(),
+    url: document.getElementById('s-url').value.trim(),
+    rss_url: document.getElementById('s-rss').value.trim(),
+    country_id: document.getElementById('s-country').value || null,
+    category: document.getElementById('s-category').value.trim() || 'General',
+    interval_min: parseInt(document.getElementById('s-interval').value)||30,
+    max_news: parseInt(document.getElementById('s-maxnews').value)||10,
+  };
+  if (!data.name || !data.rss_url) return showToast('Заполните название и RSS URL');
+  const req = id ? apiPut('/api/sources/'+id, data) : apiPost('/api/sources', data);
+  req.then(r => {
+    if (r.status==='ok') { showToast('Сохранено'); closeModal('modal-source'); setTimeout(()=>location.reload(),600); }
+    else showToast('Ошибка: '+r.message);
+  });
+}
+
+function toggleSource(id, el) {
+  apiPost('/api/sources/'+id+'/toggle', {}).then(r => {
+    if (r.status!=='ok') { el.checked = !el.checked; showToast('Ошибка'); }
+    else showToast(r.enabled ? 'Источник включён' : 'Источник выключен');
+  });
+}
+
+function deleteSource(id) {
+  if (!confirm('Удалить источник?')) return;
+  apiDel('/api/sources/'+id).then(r => {
+    if (r.status==='ok') { document.getElementById('source-row-'+id)?.remove(); showToast('Удалено'); }
+    else showToast('Ошибка: '+r.message);
+  });
+}
+
+// ---- ChatGPT ----
+function saveChatGPT() {
+  apiPost('/api/settings/chatgpt', {
+    api_key: document.getElementById('gpt-key').value,
+    model: document.getElementById('gpt-model').value,
+    temperature: document.getElementById('gpt-temp').value,
+    max_tokens: document.getElementById('gpt-tokens').value,
+  }).then(r => showToast(r.message || 'Сохранено'));
+}
+
+// ---- Prompt ----
+function savePrompt() {
+  apiPost('/api/settings/prompt', {
+    prompt: document.getElementById('prompt-text').value,
+  }).then(r => showToast(r.message || 'Сохранено'));
+}
+
+// ---- Automation ----
+function saveAutomation() {
+  apiPost('/api/settings/automation', {
+    auto_parse: document.getElementById('auto-parse')?.checked,
+    auto_chatgpt: document.getElementById('auto-chatgpt')?.checked,
+    auto_draft: document.getElementById('auto-draft')?.checked,
+  }).then(r => showToast(r.message || 'Сохранено'));
+}
+
+// ---- Dedup ----
+function saveDedup() {
+  apiPost('/api/settings/dedup', {
+    by_url: document.getElementById('dedup-url')?.checked,
+    by_title: document.getElementById('dedup-title')?.checked,
+  }).then(r => showToast(r.message || 'Сохранено'));
+}
+
+// ---- Telegram ----
+function saveTelegram() {
+  const data = {
+    name: document.getElementById('tg-name').value.trim(),
+    bot_token: document.getElementById('tg-token').value.trim(),
+    chat_id: document.getElementById('tg-chatid').value.trim(),
+    country_id: document.getElementById('tg-country').value || null,
+  };
+  if (!data.name || !data.bot_token || !data.chat_id) return showToast('Заполните все обязательные поля');
+  apiPost('/api/telegram', data).then(r => {
+    if (r.status==='ok') { showToast('Канал добавлен'); closeModal('modal-telegram'); setTimeout(()=>location.reload(),600); }
+    else showToast('Ошибка: '+r.message);
+  });
+}
+
+function deleteTelegram(id) {
+  if (!confirm('Удалить канал?')) return;
+  apiDel('/api/telegram/'+id).then(r => {
+    if (r.status==='ok') { document.getElementById('tg-row-'+id)?.remove(); showToast('Удалено'); }
+    else showToast('Ошибка: '+r.message);
+  });
+}
+
+// Reset modal-country form when opening fresh
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelector('[onclick="openModal(\'modal-country\')"]')?.addEventListener('click', () => {
+    document.getElementById('modal-country-title').textContent='Добавить страну';
+    document.getElementById('c-id').value='';
+    ['c-name','c-lang','c-channel','c-mapcode'].forEach(id=>document.getElementById(id).value='');
+  });
+  document.querySelector('[onclick="openModal(\'modal-source\')"]')?.addEventListener('click', () => {
+    document.getElementById('modal-source-title').textContent='Добавить источник';
+    document.getElementById('s-id').value='';
+    ['s-name','s-url','s-rss','s-category'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('s-interval').value=30;
+    document.getElementById('s-maxnews').value=10;
+    document.getElementById('s-country').selectedIndex=0;
+  });
+});
+</script>
+{% endblock %}
