@@ -7,7 +7,6 @@ DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
 def get_conn():
     url = DATABASE_URL
-    # Railway sometimes gives postgres://, psycopg2 needs postgresql://
     if url.startswith('postgres://'):
         url = url.replace('postgres://', 'postgresql://', 1)
     return psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
@@ -41,13 +40,18 @@ def init_db():
         CREATE TABLE IF NOT EXISTS sources (
             id SERIAL PRIMARY KEY,
             name TEXT NOT NULL,
-            url TEXT NOT NULL,
-            rss_url TEXT NOT NULL,
+            url TEXT NOT NULL DEFAULT '',
+            rss_url TEXT NOT NULL DEFAULT '',
             country_id INTEGER REFERENCES countries(id) ON DELETE SET NULL,
             category TEXT DEFAULT 'General',
             enabled BOOLEAN DEFAULT TRUE,
             interval_min INTEGER DEFAULT 30,
             max_news INTEGER DEFAULT 10,
+            parser_type TEXT DEFAULT 'rss',
+            css_item TEXT DEFAULT '',
+            css_title TEXT DEFAULT '',
+            css_link TEXT DEFAULT '',
+            base_url TEXT DEFAULT '',
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
 
@@ -82,7 +86,20 @@ def init_db():
         );
         """)
 
-        # Default settings
+        # Migrate: add new columns to sources if they don't exist yet
+        migrations = [
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS parser_type TEXT DEFAULT 'rss'",
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS css_item TEXT DEFAULT ''",
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS css_title TEXT DEFAULT ''",
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS css_link TEXT DEFAULT ''",
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS base_url TEXT DEFAULT ''",
+        ]
+        for sql in migrations:
+            try:
+                cur.execute(sql)
+            except Exception:
+                pass
+
         defaults = [
             ('chatgpt_api_key', ''),
             ('chatgpt_model', 'gpt-4o'),

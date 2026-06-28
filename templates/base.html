@@ -26,9 +26,7 @@
 
     <nav class="sidebar-nav">
       <a href="{{ url_for('parser') }}" class="nav-item {% if request.endpoint == 'parser' %}active{% endif %}">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-          <path d="M4 6h16M4 10h16M4 14h10M4 18h6"/>
-        </svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 10h16M4 14h10M4 18h6"/></svg>
         <span>Parser</span>
       </a>
       <a href="{{ url_for('map_view') }}" class="nav-item {% if request.endpoint == 'map_view' %}active{% endif %}">
@@ -37,6 +35,12 @@
           <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
         </svg>
         <span>Map</span>
+      </a>
+      <a href="{{ url_for('test_parser') }}" class="nav-item {% if request.endpoint == 'test_parser' %}active{% endif %}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        <span>Test</span>
       </a>
       <a href="{{ url_for('settings') }}" class="nav-item {% if request.endpoint == 'settings' %}active{% endif %}">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -81,7 +85,6 @@
   {% endif %}
 
   <div id="toast" class="toast"></div>
-
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   {% block scripts %}{% endblock %}
 </body>

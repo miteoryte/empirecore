@@ -82,7 +82,7 @@
             </label>
           </td>
           <td class="actions-cell">
-            <button class="btn btn-xs btn-ghost" onclick='editSource({{ s.id }}, {{ s.name|tojson }}, {{ s.url|tojson }}, {{ s.rss_url|tojson }}, {{ (s.country_id or "")|tojson }}, {{ s.category|tojson }}, {{ s.interval_min }}, {{ s.max_news }})'>Изменить</button>
+            <button class="btn btn-xs btn-ghost" onclick='editSource({{ s.id }}, {{ s.name|tojson }}, {{ s.url|tojson }}, {{ s.rss_url|tojson }}, {{ (s.country_id or "")|tojson }}, {{ s.category|tojson }}, {{ s.interval_min }}, {{ s.max_news }}, {{ (s.parser_type or "rss")|tojson }}, {{ (s.css_item or "")|tojson }}, {{ (s.css_title or "")|tojson }}, {{ (s.css_link or "")|tojson }}, {{ (s.base_url or "")|tojson }})'>Изменить</button>
             <button class="btn btn-xs btn-danger-ghost" onclick="deleteSource({{ s.id }})">Удалить</button>
           </td>
         </tr>
@@ -229,7 +229,7 @@
 
 <!-- ===== MODAL: ADD/EDIT SOURCE ===== -->
 <div id="modal-source" class="modal-overlay" style="display:none" onclick="closeModalOutside(event,'modal-source')">
-  <div class="modal-box">
+  <div class="modal-box" style="max-width:580px;">
     <div class="modal-header">
       <h3 id="modal-source-title">Добавить источник</h3>
       <button class="modal-close" onclick="closeModal('modal-source')">✕</button>
@@ -237,11 +237,56 @@
     <input type="hidden" id="s-id">
     <div class="form-stack">
       <div class="form-row2">
-        <div class="form-group"><label>Название *</label><input class="form-input" id="s-name" placeholder="BBC News"></div>
+        <div class="form-group"><label>Название *</label><input class="form-input" id="s-name" placeholder="1000things Wien"></div>
         <div class="form-group"><label>Категория</label><input class="form-input" id="s-category" placeholder="General"></div>
       </div>
-      <div class="form-group"><label>URL сайта</label><input class="form-input" id="s-url" placeholder="https://bbc.com"></div>
-      <div class="form-group"><label>RSS / API URL *</label><input class="form-input" id="s-rss" placeholder="https://feeds.bbci.co.uk/news/rss.xml"></div>
+
+      <!-- Parser type selector -->
+      <div class="form-group">
+        <label>Тип парсера</label>
+        <div class="type-tabs" style="margin-top:4px;">
+          <button class="type-tab active" data-type="rss"  onclick="setSType('rss',this)">RSS</button>
+          <button class="type-tab"        data-type="html" onclick="setSType('html',this)">HTML</button>
+          <button class="type-tab"        data-type="api"  onclick="setSType('api',this)">API</button>
+        </div>
+        <input type="hidden" id="s-parser-type" value="rss">
+      </div>
+
+      <!-- URL field — label changes based on type -->
+      <div class="form-group">
+        <label id="s-url-label">URL сайта</label>
+        <input class="form-input" id="s-url" placeholder="https://bbc.com">
+      </div>
+      <div class="form-group" id="s-rss-group">
+        <label id="s-rss-label">RSS / Feed URL *</label>
+        <input class="form-input" id="s-rss" placeholder="https://feeds.bbci.co.uk/news/rss.xml">
+      </div>
+
+      <!-- HTML-specific fields -->
+      <div id="s-html-fields" style="display:none;" class="parser-type-section">
+        <div class="panel-box-title">CSS-селекторы</div>
+        <div class="form-stack">
+          <div class="form-group">
+            <label>Селектор статьи *</label>
+            <input class="form-input monofont" id="s-css-item" placeholder="article[post-id]">
+          </div>
+          <div class="form-row2">
+            <div class="form-group">
+              <label>Селектор заголовка</label>
+              <input class="form-input monofont" id="s-css-title" placeholder="a h3">
+            </div>
+            <div class="form-group">
+              <label>Селектор ссылки</label>
+              <input class="form-input monofont" id="s-css-link" placeholder="a">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Base URL <span class="field-hint-inline">для относительных ссылок</span></label>
+            <input class="form-input" id="s-base-url" placeholder="https://www.1000thingsmagazine.com">
+          </div>
+        </div>
+      </div>
+
       <div class="form-row2">
         <div class="form-group">
           <label>Страна</label>
@@ -253,8 +298,13 @@
         <div class="form-group"><label>Интервал (мин)</label><input type="number" class="form-input" id="s-interval" value="30" min="5"></div>
         <div class="form-group"><label>Макс. новостей</label><input type="number" class="form-input" id="s-maxnews" value="10" min="1"></div>
       </div>
+
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeModal('modal-source')">Отмена</button>
+        <button class="btn btn-ghost" onclick="openTestWithCurrent()" style="margin-right:auto;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Протестировать
+        </button>
         <button class="btn btn-primary" onclick="saveSource()">Сохранить</button>
       </div>
     </div>
@@ -343,7 +393,32 @@ function deleteCountry(id) {
 }
 
 // ---- Sources ----
-function editSource(id, name, url, rss, countryId, category, interval, maxnews) {
+function setSType(type, btn) {
+  document.getElementById('s-parser-type').value = type;
+  document.querySelectorAll('.type-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const htmlF = document.getElementById('s-html-fields');
+  const rssG  = document.getElementById('s-rss-group');
+  const rssL  = document.getElementById('s-rss-label');
+  const urlL  = document.getElementById('s-url-label');
+  if (type === 'html') {
+    htmlF.style.display = 'block';
+    rssG.style.display  = 'none';
+    urlL.textContent    = 'URL страницы для парсинга *';
+  } else if (type === 'api') {
+    htmlF.style.display = 'none';
+    rssG.style.display  = 'block';
+    rssL.textContent    = 'API URL (JSON endpoint) *';
+    urlL.textContent    = 'URL сайта';
+  } else {
+    htmlF.style.display = 'none';
+    rssG.style.display  = 'block';
+    rssL.textContent    = 'RSS / Feed URL *';
+    urlL.textContent    = 'URL сайта';
+  }
+}
+
+function editSource(id, name, url, rss, countryId, category, interval, maxnews, parserType, cssItem, cssTitle, cssLink, baseUrl) {
   document.getElementById('modal-source-title').textContent = 'Изменить источник';
   document.getElementById('s-id').value = id;
   document.getElementById('s-name').value = name;
@@ -352,28 +427,58 @@ function editSource(id, name, url, rss, countryId, category, interval, maxnews) 
   document.getElementById('s-category').value = category;
   document.getElementById('s-interval').value = interval;
   document.getElementById('s-maxnews').value = maxnews;
+  document.getElementById('s-css-item').value  = cssItem  || '';
+  document.getElementById('s-css-title').value = cssTitle || '';
+  document.getElementById('s-css-link').value  = cssLink  || '';
+  document.getElementById('s-base-url').value  = baseUrl  || '';
   const sel = document.getElementById('s-country');
   for (let o of sel.options) if (o.value == countryId) { o.selected = true; break; }
+  const ptype = parserType || 'rss';
+  setSType(ptype, document.querySelector(`.type-tab[data-type="${ptype}"]`));
   openModal('modal-source');
 }
 
 function saveSource() {
-  const id = document.getElementById('s-id').value;
+  const id   = document.getElementById('s-id').value;
+  const ptype = document.getElementById('s-parser-type').value;
   const data = {
-    name: document.getElementById('s-name').value.trim(),
-    url: document.getElementById('s-url').value.trim(),
-    rss_url: document.getElementById('s-rss').value.trim(),
-    country_id: document.getElementById('s-country').value || null,
-    category: document.getElementById('s-category').value.trim() || 'General',
+    name:        document.getElementById('s-name').value.trim(),
+    url:         document.getElementById('s-url').value.trim(),
+    rss_url:     document.getElementById('s-rss').value.trim(),
+    country_id:  document.getElementById('s-country').value || null,
+    category:    document.getElementById('s-category').value.trim() || 'General',
     interval_min: parseInt(document.getElementById('s-interval').value)||30,
-    max_news: parseInt(document.getElementById('s-maxnews').value)||10,
+    max_news:    parseInt(document.getElementById('s-maxnews').value)||10,
+    parser_type: ptype,
+    css_item:    document.getElementById('s-css-item').value.trim(),
+    css_title:   document.getElementById('s-css-title').value.trim(),
+    css_link:    document.getElementById('s-css-link').value.trim(),
+    base_url:    document.getElementById('s-base-url').value.trim(),
   };
-  if (!data.name || !data.rss_url) return showToast('Заполните название и RSS URL');
+  if (!data.name) return showToast('Укажите название источника');
+  if (ptype === 'html' && !data.url)     return showToast('Укажите URL страницы');
+  if (ptype === 'html' && !data.css_item) return showToast('Укажите CSS-селектор статьи');
+  if (ptype !== 'html' && !data.rss_url) return showToast('Укажите RSS/API URL');
   const req = id ? apiPut('/api/sources/'+id, data) : apiPost('/api/sources', data);
   req.then(r => {
     if (r.status==='ok') { showToast('Сохранено'); closeModal('modal-source'); setTimeout(()=>location.reload(),600); }
     else showToast('Ошибка: '+r.message);
   });
+}
+
+function openTestWithCurrent() {
+  const ptype = document.getElementById('s-parser-type').value;
+  const url   = ptype === 'html'
+    ? document.getElementById('s-url').value.trim()
+    : document.getElementById('s-rss').value.trim();
+  const params = new URLSearchParams({
+    _type: ptype, _url: url,
+    _item:  document.getElementById('s-css-item').value.trim(),
+    _title: document.getElementById('s-css-title').value.trim(),
+    _link:  document.getElementById('s-css-link').value.trim(),
+    _base:  document.getElementById('s-base-url').value.trim(),
+  });
+  window.open('/test?' + params.toString(), '_blank');
 }
 
 function toggleSource(id, el) {

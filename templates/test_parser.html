@@ -1,0 +1,258 @@
+{% extends 'base.html' %}
+{% block title %} — Test Parser{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h2 class="page-title">Test Parser</h2>
+    <p class="page-sub">Проверка парсинга источника перед добавлением</p>
+  </div>
+</div>
+
+<div class="test-layout">
+
+  <!-- Config panel -->
+  <div class="test-config">
+    <div class="panel-box">
+      <h4 class="panel-box-title">Конфигурация</h4>
+
+      <div class="form-stack">
+        <div class="form-group">
+          <label>Тип парсера</label>
+          <div class="type-tabs">
+            <button class="type-tab active" data-type="rss" onclick="setType('rss',this)">RSS</button>
+            <button class="type-tab" data-type="html" onclick="setType('html',this)">HTML</button>
+            <button class="type-tab" data-type="api" onclick="setType('api',this)">API</button>
+          </div>
+          <input type="hidden" id="t-type" value="rss">
+        </div>
+
+        <div class="form-group">
+          <label id="url-label">RSS / Feed URL</label>
+          <input class="form-input" id="t-url" placeholder="https://feeds.bbci.co.uk/news/rss.xml">
+        </div>
+
+        <!-- HTML-only fields -->
+        <div id="html-fields" style="display:none;" class="form-stack">
+          <div class="css-hint">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            CSS-селекторы как в <code>document.querySelectorAll()</code>
+          </div>
+          <div class="form-group">
+            <label>Селектор статьи <span class="field-hint-inline">Контейнер каждого материала</span></label>
+            <input class="form-input monofont" id="t-css-item" placeholder="article[post-id]">
+          </div>
+          <div class="form-group">
+            <label>Селектор заголовка</label>
+            <input class="form-input monofont" id="t-css-title" placeholder="a h3">
+          </div>
+          <div class="form-group">
+            <label>Селектор ссылки</label>
+            <input class="form-input monofont" id="t-css-link" placeholder="a">
+          </div>
+          <div class="form-group">
+            <label>Base URL <span class="field-hint-inline">Для относительных ссылок</span></label>
+            <input class="form-input" id="t-base-url" placeholder="https://www.1000thingsmagazine.com">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Макс. результатов</label>
+          <input type="number" class="form-input" id="t-max" value="20" min="1" max="100">
+        </div>
+
+        <button class="btn btn-primary btn-block" onclick="runTest()" id="run-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          Запустить парсер
+        </button>
+      </div>
+    </div>
+
+    <!-- Quick examples -->
+    <div class="panel-box" style="margin-top:12px;">
+      <h4 class="panel-box-title">Примеры</h4>
+      <div class="examples-list">
+        <button class="example-btn" onclick="loadExample('bbc')">BBC News (RSS)</button>
+        <button class="example-btn" onclick="loadExample('1000things')">1000things (HTML)</button>
+        <button class="example-btn" onclick="loadExample('reuters')">Reuters (RSS)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results panel -->
+  <div class="test-results">
+    <div class="panel-box" id="results-box">
+      <div class="test-empty" id="results-empty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <p>Результаты появятся здесь</p>
+        <span>Настройте конфигурацию слева и нажмите «Запустить парсер»</span>
+      </div>
+
+      <div id="results-content" style="display:none;">
+        <div class="results-header">
+          <div>
+            <span class="results-count" id="results-count">0 материалов</span>
+            <span class="results-type-tag" id="results-type-tag"></span>
+          </div>
+          <span class="results-time" id="results-time"></span>
+        </div>
+
+        <div id="error-box" class="error-box" style="display:none;"></div>
+
+        <div class="results-list" id="results-list"></div>
+      </div>
+
+      <div id="results-loading" style="display:none;" class="test-loading">
+        <div class="spinner"></div>
+        <p>Парсим...</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const EXAMPLES = {
+  bbc: { type:'rss', url:'https://feeds.bbci.co.uk/news/rss.xml', label:'BBC News RSS' },
+  '1000things': {
+    type:'html',
+    url:'https://www.1000thingsmagazine.com/de/at/wien/',
+    css_item:'article[post-id]', css_title:'a h3', css_link:'a',
+    base_url:'https://www.1000thingsmagazine.com',
+    label:'1000things Wien HTML'
+  },
+  reuters: { type:'rss', url:'https://feeds.reuters.com/reuters/topNews', label:'Reuters RSS' },
+};
+
+function loadExample(key) {
+  const ex = EXAMPLES[key];
+  if (!ex) return;
+  setType(ex.type, document.querySelector(`.type-tab[data-type="${ex.type}"]`));
+  document.getElementById('t-url').value = ex.url || '';
+  document.getElementById('t-css-item').value = ex.css_item || '';
+  document.getElementById('t-css-title').value = ex.css_title || '';
+  document.getElementById('t-css-link').value = ex.css_link || '';
+  document.getElementById('t-base-url').value = ex.base_url || '';
+  showToast('Загружен пример: ' + ex.label);
+}
+
+function setType(type, btn) {
+  document.getElementById('t-type').value = type;
+  document.querySelectorAll('.type-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const htmlFields = document.getElementById('html-fields');
+  const urlLabel = document.getElementById('url-label');
+  if (type === 'html') {
+    htmlFields.style.display = 'flex';
+    urlLabel.textContent = 'URL страницы';
+  } else if (type === 'api') {
+    htmlFields.style.display = 'none';
+    urlLabel.textContent = 'API URL (JSON endpoint)';
+  } else {
+    htmlFields.style.display = 'none';
+    urlLabel.textContent = 'RSS / Feed URL';
+  }
+}
+
+async function runTest() {
+  const url = document.getElementById('t-url').value.trim();
+  if (!url) return showToast('Укажите URL');
+
+  const body = {
+    parser_type: document.getElementById('t-type').value,
+    url,
+    css_item:  document.getElementById('t-css-item').value.trim(),
+    css_title: document.getElementById('t-css-title').value.trim(),
+    css_link:  document.getElementById('t-css-link').value.trim(),
+    base_url:  document.getElementById('t-base-url').value.trim(),
+    max_items: parseInt(document.getElementById('t-max').value) || 20,
+  };
+
+  document.getElementById('results-empty').style.display = 'none';
+  document.getElementById('results-content').style.display = 'none';
+  document.getElementById('results-loading').style.display = 'flex';
+  document.getElementById('run-btn').disabled = true;
+
+  const t0 = Date.now();
+  try {
+    const resp = await fetch('/api/test-parse', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    const elapsed = ((Date.now()-t0)/1000).toFixed(2);
+    renderResults(data, body.parser_type, elapsed);
+  } catch(e) {
+    renderResults({items:[],error:e.message,count:0}, body.parser_type, '—');
+  } finally {
+    document.getElementById('results-loading').style.display = 'none';
+    document.getElementById('run-btn').disabled = false;
+  }
+}
+
+function renderResults(data, type, elapsed) {
+  document.getElementById('results-content').style.display = 'block';
+  document.getElementById('results-count').textContent =
+    data.count + ' материал' + (data.count===1?'':data.count>4?'ов':'а') + ' найдено';
+  document.getElementById('results-type-tag').textContent = type.toUpperCase();
+  document.getElementById('results-time').textContent = elapsed + 's';
+
+  const errBox = document.getElementById('error-box');
+  if (data.error) {
+    errBox.style.display = 'block';
+    errBox.textContent = '⚠ ' + data.error;
+  } else {
+    errBox.style.display = 'none';
+  }
+
+  const list = document.getElementById('results-list');
+  if (!data.items || data.items.length === 0) {
+    list.innerHTML = '<div class="no-items">Материалов не найдено. Проверьте URL и селекторы.</div>';
+    return;
+  }
+
+  list.innerHTML = data.items.map((item, i) => `
+    <div class="result-item">
+      <div class="result-num">${i+1}</div>
+      ${item.image ? `<img class="result-img" src="${escHtml(item.image)}" onerror="this.style.display='none'">` : ''}
+      <div class="result-body">
+        <div class="result-title">${escHtml(item.title)}</div>
+        <a class="result-link" href="${escHtml(item.link)}" target="_blank" rel="noopener">${escHtml(item.link)}</a>
+        ${item.summary ? `<div class="result-summary">${escHtml(item.summary.substring(0,200))}${item.summary.length>200?'…':''}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Run on Enter in URL field
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('t-url').addEventListener('keydown', e => {
+    if (e.key === 'Enter') runTest();
+  });
+
+  // Auto-fill from URL params (when opened from Settings modal)
+  const p = new URLSearchParams(location.search);
+  if (p.get('_type')) {
+    const type = p.get('_type');
+    setType(type, document.querySelector(`.type-tab[data-type="${type}"]`));
+    if (p.get('_url'))   document.getElementById('t-url').value       = p.get('_url');
+    if (p.get('_item'))  document.getElementById('t-css-item').value  = p.get('_item');
+    if (p.get('_title')) document.getElementById('t-css-title').value = p.get('_title');
+    if (p.get('_link'))  document.getElementById('t-css-link').value  = p.get('_link');
+    if (p.get('_base'))  document.getElementById('t-base-url').value  = p.get('_base');
+    if (p.get('_url')) setTimeout(runTest, 300);
+  }
+});
+</script>
+{% endblock %}
