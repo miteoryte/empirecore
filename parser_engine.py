@@ -2,6 +2,7 @@
 Universal parser engine.
 Supports: rss, html (BeautifulSoup + CSS selectors), api (JSON)
 """
+
 import requests
 from bs4 import BeautifulSoup
 import feedparser
@@ -11,8 +12,30 @@ import time
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
+    # Принимаем любые языки — не навязываем английский европейским сайтам
+    "Accept-Language": "de,fr,pl,cs,hu,ro,bg,nl,sv,no,da,fi,sk,hr,sl,lt,lv,et,uk,en;q=0.3",
+    "Accept-Charset": "utf-8, iso-8859-1;q=0.7, *;q=0.3",
 }
+
+
+def _fetch_bytes(url: str) -> bytes:
+    """Получить сырые байты с правильным контролем кодировки."""
+    resp = requests.get(url, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    return resp.content
+
+
+def _fetch_text(url: str) -> tuple[requests.Response, str]:
+    """Получить текст с принудительным определением кодировки."""
+    resp = requests.get(url, headers=HEADERS, timeout=15)
+    resp.raise_for_status()
+    # apparent_encoding использует charset-normalizer (встроен в requests)
+    # Это намного точнее, чем resp.encoding по умолчанию
+    if resp.encoding and resp.encoding.lower() in ('iso-8859-1', 'latin-1', 'ascii'):
+        # requests вернул дефолтную кодировку — доверяем apparent_encoding
+        resp.encoding = resp.apparent_encoding
+    return resp, resp.text
+
 
 def parse_source(source: dict, max_items: int = 20) -> dict:
     """
@@ -39,70 +62,82 @@ def parse_source(source: dict, max_items: int = 20) -> dict:
 
 def _parse_rss(source: dict, max_items: int) -> dict:
     feed_url = source.get('rss_url') or source.get('url', '')
-    feed = feedparser.parse(feed_url)
+
+    # ФИКС: вручную скачиваем байты и передаём в feedparser
+    # Так он читает encoding из XML-декларации/заголовков правильно,
+    # а не полагается на свой внутренний fetch
+    try:
+        raw = _fetch_bytes(feed_url)
+        feed = feedparser.parse(raw)
+    except Exception:
+        # fallback на прямой парсинг URL
+        feed = feedparser.parse(feed_url)
+
     if feed.bozo and not feed.entries:
         raise Exception(f"RSS parse error: {feed.bozo_exception}")
+
     items = []
     for entry in feed.entries[:max_items]:
         title = entry.get('title', '').strip()
-        link = entry.get('link', '').strip()
+        link  = entry.get('link', '').strip()
         summary = entry.get('summary', '') or entry.get('description', '')
         image = _extract_rss_image(entry)
+
         if title and link:
             items.append({
-                "title": title,
-                "link": link,
+                "title":   title,
+                "link":    link,
                 "summary": _strip_html(summary)[:500],
-                "image": image,
+                "image":   image,
             })
+
     return {"items": items, "error": None, "count": len(items)}
 
 
 def _parse_html(source: dict, max_items: int) -> dict:
-    url = source.get('url') or source.get('rss_url', '')
-    css_item = source.get('css_item', 'article')
+    url       = source.get('url') or source.get('rss_url', '')
+    css_item  = source.get('css_item',  'article')
     css_title = source.get('css_title', 'h2, h3')
-    css_link = source.get('css_link', 'a')
-    base_url = source.get('base_url', '').rstrip('/')
+    css_link  = source.get('css_link',  'a')
+    base_url  = source.get('base_url',  '').rstrip('/')
 
     if not url:
         raise Exception("URL не указан")
 
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, 'lxml')
+    raw = _fetch_bytes(url)
 
+    # ГЛАВНЫЙ ФИКС: передаём байты, а не строку.
+    # BeautifulSoup + lxml сами читают <meta charset="..."> / <?xml encoding="..."?>
+    # и декодируют корректно для любой европейской кодировки.
+    soup = BeautifulSoup(raw, 'lxml')
     articles = soup.select(css_item)
+
     if not articles:
-        # Try html.parser as fallback
-        soup = BeautifulSoup(resp.text, 'html.parser')
+        soup = BeautifulSoup(raw, 'html.parser')
         articles = soup.select(css_item)
 
     items = []
     seen_links = set()
 
     for art in articles[:max_items * 2]:
-        # Find title
         title_el = art.select_one(css_title) if css_title else None
         title = ''
         if title_el:
             title = ''.join(title_el.stripped_strings).strip()
 
-        # Find link
         link_el = art.select_one(css_link) if css_link else art.select_one('a')
         link = ''
         if link_el:
             link = link_el.get('href', '').strip()
-            # Fix relative URLs
-            if link and not link.startswith('http'):
-                if link.startswith('//'):
-                    link = 'https:' + link
-                elif link.startswith('/'):
-                    link = base_url + link
-                else:
-                    link = base_url + '/' + link
 
-        # Find image
+        if link and not link.startswith('http'):
+            if link.startswith('//'):
+                link = 'https:' + link
+            elif link.startswith('/'):
+                link = base_url + link
+            else:
+                link = base_url + '/' + link
+
         img_el = art.select_one('img')
         image = img_el.get('src', '') if img_el else ''
         if image and not image.startswith('http') and base_url:
@@ -111,11 +146,12 @@ def _parse_html(source: dict, max_items: int) -> dict:
         if title and link and link not in seen_links:
             seen_links.add(link)
             items.append({
-                "title": title,
-                "link": link,
+                "title":   title,
+                "link":    link,
                 "summary": "",
-                "image": image,
+                "image":   image,
             })
+
         if len(items) >= max_items:
             break
 
@@ -124,11 +160,9 @@ def _parse_html(source: dict, max_items: int) -> dict:
 
 def _parse_api(source: dict, max_items: int) -> dict:
     url = source.get('rss_url') or source.get('url', '')
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    resp, _ = _fetch_text(url)
     data = resp.json()
 
-    # Try to find items array
     items_data = data
     if isinstance(data, dict):
         for key in ['items', 'articles', 'results', 'data', 'posts']:
@@ -138,35 +172,33 @@ def _parse_api(source: dict, max_items: int) -> dict:
 
     items = []
     for entry in (items_data if isinstance(items_data, list) else [])[:max_items]:
-        title = entry.get('title') or entry.get('name') or entry.get('headline', '')
-        link = entry.get('url') or entry.get('link') or entry.get('href', '')
+        title   = entry.get('title') or entry.get('name') or entry.get('headline', '')
+        link    = entry.get('url')   or entry.get('link') or entry.get('href', '')
         summary = entry.get('summary') or entry.get('description') or entry.get('excerpt', '')
-        image = entry.get('image') or entry.get('thumbnail') or entry.get('image_url', '')
+        image   = entry.get('image') or entry.get('thumbnail') or entry.get('image_url', '')
         if isinstance(image, dict):
             image = image.get('url', '')
+
         if title and link:
             items.append({
-                "title": str(title).strip(),
-                "link": str(link).strip(),
+                "title":   str(title).strip(),
+                "link":    str(link).strip(),
                 "summary": str(summary)[:500] if summary else '',
-                "image": str(image) if image else '',
+                "image":   str(image) if image else '',
             })
+
     return {"items": items, "error": None, "count": len(items)}
 
 
 def _extract_rss_image(entry) -> str:
-    # media:content
     if hasattr(entry, 'media_content') and entry.media_content:
         return entry.media_content[0].get('url', '')
-    # media:thumbnail
     if hasattr(entry, 'media_thumbnail') and entry.media_thumbnail:
         return entry.media_thumbnail[0].get('url', '')
-    # enclosures
     if hasattr(entry, 'enclosures') and entry.enclosures:
         for enc in entry.enclosures:
             if enc.get('type', '').startswith('image'):
                 return enc.get('href', '')
-    # img in summary
     summary = entry.get('summary', '') or entry.get('content', [{}])[0].get('value', '')
     if summary and '<img' in summary:
         soup = BeautifulSoup(summary, 'html.parser')
