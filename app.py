@@ -474,7 +474,6 @@ def news_action(nid):
                     LEFT JOIN sources s ON n.source_id = s.id
                     LEFT JOIN telegram_channels t
                            ON t.country_id = s.country_id
-                          AND t.status = 'connected'
                     WHERE n.id = %s
                     LIMIT 1
                 """, (nid,))
