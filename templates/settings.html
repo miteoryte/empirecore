@@ -174,7 +174,7 @@
           <td><strong>{{ t.name }}</strong></td>
           <td><code class="lang-tag">{{ t.chat_id }}</code></td>
           <td>{{ t.country_name or '—' }}</td>
-          <td><span class="status-dot {% if t.status=='connected' %}connected{% else %}error{% endif %}">{{ 'Подключён' if t.status=='connected' else 'Ошибка' }}</span></td>
+          <td><span class="status-dot {% if t.status in ('connected','active') %}connected{% else %}error{% endif %}">{{ 'Подключён' if t.status in ('connected','active') else 'Ошибка' }}</span></td>
           <td class="actions-cell">
             <button class="btn btn-xs btn-danger-ghost" onclick="deleteTelegram({{ t.id }})">Удалить</button>
           </td>
