@@ -52,6 +52,7 @@ def init_db():
             css_title TEXT DEFAULT '',
             css_link TEXT DEFAULT '',
             base_url TEXT DEFAULT '',
+            last_parsed_at TIMESTAMPTZ DEFAULT NULL,
             created_at TIMESTAMPTZ DEFAULT NOW()
         );
 
@@ -86,13 +87,14 @@ def init_db():
         );
         """)
 
-        # Migrate: add new columns to sources if they don't exist yet
+        # Migrate: add new columns if they don't exist yet
         migrations = [
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS parser_type TEXT DEFAULT 'rss'",
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS css_item TEXT DEFAULT ''",
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS css_title TEXT DEFAULT ''",
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS css_link TEXT DEFAULT ''",
             "ALTER TABLE sources ADD COLUMN IF NOT EXISTS base_url TEXT DEFAULT ''",
+            "ALTER TABLE sources ADD COLUMN IF NOT EXISTS last_parsed_at TIMESTAMPTZ DEFAULT NULL",
         ]
         for sql in migrations:
             try:
@@ -119,12 +121,14 @@ def init_db():
                 ON CONFLICT (key) DO NOTHING
             """, (key, val))
 
+
 def get_setting(key, default=''):
     with db() as conn:
         cur = conn.cursor()
         cur.execute("SELECT value FROM settings WHERE key = %s", (key,))
         row = cur.fetchone()
         return row['value'] if row else default
+
 
 def set_setting(key, value):
     with db() as conn:
@@ -135,9 +139,39 @@ def set_setting(key, value):
             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
         """, (key, str(value)))
 
+
 def get_all_settings():
     with db() as conn:
         cur = conn.cursor()
         cur.execute("SELECT key, value FROM settings")
         rows = cur.fetchall()
         return {r['key']: r['value'] for r in rows}
+
+
+def save_parsed_articles(source_id: int, items: list, dedup_url: bool = True, dedup_title: bool = False) -> int:
+    """Save parsed articles to DB, return count of newly saved."""
+    if not items:
+        return 0
+    saved = 0
+    with db() as conn:
+        cur = conn.cursor()
+        for item in items:
+            url = item.get('link', '')
+            title = item.get('title', '')
+            if not url or not title:
+                continue
+            if dedup_url and url:
+                cur.execute("SELECT id FROM news WHERE original_url=%s", (url,))
+                if cur.fetchone():
+                    continue
+            if dedup_title and title:
+                cur.execute("SELECT id FROM news WHERE original_title=%s", (title,))
+                if cur.fetchone():
+                    continue
+            cur.execute("""INSERT INTO news (source_id, original_title, original_url, image_url, status)
+                VALUES (%s, %s, %s, %s, 'new')""",
+                (source_id, title, url, item.get('image', '') or ''))
+            saved += 1
+        if saved > 0:
+            cur.execute("UPDATE sources SET last_parsed_at=NOW() WHERE id=%s", (source_id,))
+    return saved

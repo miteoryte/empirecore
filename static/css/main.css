@@ -1318,3 +1318,51 @@ select.form-input { appearance: none; cursor: pointer; }
   margin-top: 4px;
 }
 .parser-type-section .panel-box-title { margin-bottom: 10px; }
+
+/* ===== SYNC / FREEZE STYLES ===== */
+.sync-active {
+  position: relative;
+}
+.sync-active::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  background: linear-gradient(90deg, rgba(99,102,241,.06) 0%, rgba(99,102,241,.03) 100%);
+  pointer-events: none;
+}
+
+.sync-freeze-notice {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: rgba(99,102,241,.1);
+  border: 1px solid rgba(99,102,241,.25);
+  color: var(--accent);
+  font-size: .8rem;
+}
+.sync-freeze-notice.hidden { display: none; }
+
+/* frozen interval cell in sources table */
+.interval-cell.sync-frozen {
+  position: relative;
+  color: var(--text-muted);
+}
+.interval-cell.sync-frozen .freeze-icon {
+  vertical-align: middle;
+  margin-left: 4px;
+  opacity: .55;
+  color: var(--accent);
+}
+
+/* last parsed column */
+.last-parse-time {
+  font-size: .78rem;
+  color: var(--text-secondary);
+}
+.last-parse-never {
+  font-size: .78rem;
+  color: var(--text-muted);
+}

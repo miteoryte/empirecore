@@ -8,11 +8,11 @@
     <p class="page-sub">{{ news|length }} материал{{ 'ов' if news|length != 1 else '' }} найдено</p>
   </div>
   <div class="header-actions">
-    <button class="btn btn-ghost" onclick="runParser()">
+    <button class="btn btn-ghost" id="btn-instant-parse" onclick="instantParse()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.08-7.78"/>
+        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
       </svg>
-      Запустить
+      Инста парсинга
     </button>
     <button class="btn btn-primary" onclick="bulkPublish()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -197,8 +197,24 @@ function bulkAction(action) {
   showToast('Действие "' + action + '" применено к ' + ids.length + ' материалам');
 }
 
-function runParser() {
-  showToast('Парсер запущен...');
+function instantParse() {
+  const btn = document.getElementById('btn-instant-parse');
+  btn.disabled = true;
+  btn.textContent = 'Парсинг...';
+  showToast('Запускаю парсинг всех источников...');
+  fetch('/api/parse/instant', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+    .then(r => r.json())
+    .then(data => {
+      showToast(data.message || 'Готово');
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Инста парсинга';
+      if (data.saved > 0) setTimeout(() => location.reload(), 1500);
+    })
+    .catch(() => {
+      showToast('Ошибка при парсинге');
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Инста парсинга';
+    });
 }
 
 function bulkPublish() {

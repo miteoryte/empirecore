@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-import pyotp, os
+import pyotp, os, threading
 from functools import wraps
-from db import init_db, db, get_setting, set_setting, get_all_settings
+from db import init_db, db, get_setting, set_setting, get_all_settings, save_parsed_articles
 from parser_engine import parse_source
 
 app = Flask(__name__)
@@ -65,10 +65,10 @@ def index():
 @app.route('/parser')
 @login_required
 def parser():
-    cf = request.args.get('country','')
-    sf = request.args.get('source','')
+    cf   = request.args.get('country','')
+    sf   = request.args.get('source','')
     catf = request.args.get('category','')
-    stf = request.args.get('status','')
+    stf  = request.args.get('status','')
     try:
         with db() as conn:
             cur = conn.cursor()
@@ -78,10 +78,10 @@ def parser():
                    LEFT JOIN countries c ON s.country_id = c.id
                    WHERE 1=1"""
             p = []
-            if cf:   q += " AND c.name=%s";  p.append(cf)
-            if sf:   q += " AND s.name=%s";  p.append(sf)
+            if cf:   q += " AND c.name=%s";     p.append(cf)
+            if sf:   q += " AND s.name=%s";     p.append(sf)
             if catf: q += " AND s.category=%s"; p.append(catf)
-            if stf:  q += " AND n.status=%s"; p.append(stf)
+            if stf:  q += " AND n.status=%s";   p.append(stf)
             q += " ORDER BY n.parsed_at DESC LIMIT 100"
             cur.execute(q, p)
             news = cur.fetchall()
@@ -95,8 +95,8 @@ def parser():
         print(f"[DB] {e}")
         news=countries=sources=categories=[]
     return render_template('parser.html', news=news, countries=countries,
-        sources=sources, categories=categories,
-        filters=dict(country=cf,source=sf,category=catf,status=stf))
+                           sources=sources, categories=categories,
+                           filters=dict(country=cf,source=sf,category=catf,status=stf))
 
 @app.route('/map')
 @login_required
@@ -134,7 +134,7 @@ def settings():
         countries=sources=telegram=countries_list=[]
     cfg = get_all_settings()
     return render_template('settings.html', countries=countries, sources=sources,
-        telegram=telegram, countries_list=countries_list, cfg=cfg, active_tab=active_tab)
+                           telegram=telegram, countries_list=countries_list, cfg=cfg, active_tab=active_tab)
 
 @app.route('/test')
 @login_required
@@ -156,7 +156,7 @@ def add_country():
         with db() as conn:
             cur = conn.cursor()
             cur.execute("""INSERT INTO countries (name,language,telegram_channel,map_code,active)
-                           VALUES (%s,%s,%s,%s,TRUE) RETURNING id""",
+                VALUES (%s,%s,%s,%s,TRUE) RETURNING id""",
                 (d['name'], d.get('language','en'), d.get('telegram_channel',''), d.get('map_code','')))
             return jsonify({'status':'ok','id':cur.fetchone()['id']})
     except Exception as e:
@@ -170,9 +170,9 @@ def update_country(cid):
         with db() as conn:
             cur = conn.cursor()
             cur.execute("""UPDATE countries SET name=%s,language=%s,telegram_channel=%s,map_code=%s
-                           WHERE id=%s""",
+                WHERE id=%s""",
                 (d['name'],d.get('language','en'),d.get('telegram_channel',''),d.get('map_code',''),cid))
-        return jsonify({'status':'ok'})
+            return jsonify({'status':'ok'})
     except Exception as e:
         return jsonify({'status':'error','message':str(e)}), 400
 
@@ -183,11 +183,23 @@ def delete_country(cid):
         with db() as conn:
             cur = conn.cursor()
             cur.execute("DELETE FROM countries WHERE id=%s",(cid,))
-        return jsonify({'status':'ok'})
+            return jsonify({'status':'ok'})
     except Exception as e:
         return jsonify({'status':'error','message':str(e)}), 400
 
 # ===================== API — SOURCES =====================
+
+def _async_initial_parse(source_id, source_cfg):
+    """Run initial parse of 10 articles in background thread."""
+    try:
+        dedup_url   = get_setting('dedup_by_url',   'true') == 'true'
+        dedup_title = get_setting('dedup_by_title',  'true') == 'true'
+        result = parse_source(source_cfg, max_items=10)
+        if result.get('items'):
+            saved = save_parsed_articles(source_id, result['items'], dedup_url, dedup_title)
+            print(f"[INIT PARSE] source={source_id} saved={saved}")
+    except Exception as e:
+        print(f"[INIT PARSE ERROR] source={source_id}: {e}")
 
 @app.route('/api/sources', methods=['POST'])
 @login_required
@@ -206,7 +218,22 @@ def add_source():
                  d.get('parser_type','rss'),
                  d.get('css_item',''), d.get('css_title',''),
                  d.get('css_link',''), d.get('base_url','')))
-            return jsonify({'status':'ok','id':cur.fetchone()['id']})
+            new_id = cur.fetchone()['id']
+
+        # Kick off initial parse of 10 latest articles in background
+        source_cfg = {
+            'parser_type': d.get('parser_type','rss'),
+            'url':         d.get('url',''),
+            'rss_url':     d.get('rss_url',''),
+            'css_item':    d.get('css_item',''),
+            'css_title':   d.get('css_title',''),
+            'css_link':    d.get('css_link',''),
+            'base_url':    d.get('base_url',''),
+        }
+        t = threading.Thread(target=_async_initial_parse, args=(new_id, source_cfg), daemon=True)
+        t.start()
+
+        return jsonify({'status':'ok','id':new_id})
     except Exception as e:
         return jsonify({'status':'error','message':str(e)}), 400
 
@@ -228,7 +255,7 @@ def update_source(sid):
                  d.get('parser_type','rss'),
                  d.get('css_item',''),d.get('css_title',''),
                  d.get('css_link',''),d.get('base_url',''),sid))
-        return jsonify({'status':'ok'})
+            return jsonify({'status':'ok'})
     except Exception as e:
         return jsonify({'status':'error','message':str(e)}), 400
 
@@ -250,9 +277,43 @@ def delete_source(sid):
         with db() as conn:
             cur = conn.cursor()
             cur.execute("DELETE FROM sources WHERE id=%s",(sid,))
-        return jsonify({'status':'ok'})
+            return jsonify({'status':'ok'})
     except Exception as e:
         return jsonify({'status':'error','message':str(e)}), 400
+
+# ===================== API — INSTANT PARSE =====================
+
+@app.route('/api/parse/instant', methods=['POST'])
+@login_required
+def instant_parse():
+    """Немедленно парсит все включённые источники."""
+    try:
+        with db() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM sources WHERE enabled=TRUE")
+            sources_list = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        return jsonify({'status':'error','message':str(e)}), 400
+
+    dedup_url   = get_setting('dedup_by_url',   'true') == 'true'
+    dedup_title = get_setting('dedup_by_title',  'true') == 'true'
+
+    total_saved  = 0
+    total_errors = 0
+    for src in sources_list:
+        try:
+            result = parse_source(src, max_items=src.get('max_news', 10))
+            if result.get('items'):
+                saved = save_parsed_articles(src['id'], result['items'], dedup_url, dedup_title)
+                total_saved += saved
+        except Exception as e:
+            print(f"[INSTANT PARSE] source={src['id']} error: {e}")
+            total_errors += 1
+
+    msg = f'Готово: сохранено {total_saved} новых материалов'
+    if total_errors:
+        msg += f', ошибок: {total_errors}'
+    return jsonify({'status':'ok', 'saved': total_saved, 'errors': total_errors, 'message': msg})
 
 # ===================== API — TEST PARSER =====================
 
@@ -262,15 +323,14 @@ def test_parse():
     d = request.json
     source_cfg = {
         'parser_type': d.get('parser_type','rss'),
-        'url':        d.get('url',''),
-        'rss_url':    d.get('url',''),
-        'css_item':   d.get('css_item',''),
-        'css_title':  d.get('css_title',''),
-        'css_link':   d.get('css_link',''),
-        'base_url':   d.get('base_url',''),
+        'url':         d.get('url',''),
+        'rss_url':     d.get('url',''),
+        'css_item':    d.get('css_item',''),
+        'css_title':   d.get('css_title',''),
+        'css_link':    d.get('css_link',''),
+        'base_url':    d.get('base_url',''),
     }
     result = parse_source(source_cfg, max_items=int(d.get('max_items',20)))
-    # Store in temp cache keyed by session id
     sid = session.get('_id')
     if not sid:
         import uuid; sid = str(uuid.uuid4()); session['_id'] = sid
@@ -283,10 +343,10 @@ def test_parse():
 @login_required
 def save_chatgpt():
     d = request.json
-    set_setting('chatgpt_api_key', d.get('api_key',''))
-    set_setting('chatgpt_model', d.get('model','gpt-4o'))
-    set_setting('chatgpt_temperature', d.get('temperature','0.7'))
-    set_setting('chatgpt_max_tokens', d.get('max_tokens','1000'))
+    set_setting('chatgpt_api_key',      d.get('api_key',''))
+    set_setting('chatgpt_model',        d.get('model','gpt-4o'))
+    set_setting('chatgpt_temperature',  d.get('temperature','0.7'))
+    set_setting('chatgpt_max_tokens',   d.get('max_tokens','1000'))
     return jsonify({'status':'ok','message':'Настройки ChatGPT сохранены'})
 
 @app.route('/api/settings/prompt', methods=['POST'])
@@ -299,17 +359,17 @@ def save_prompt():
 @login_required
 def save_automation():
     d = request.json
-    set_setting('auto_parse',  'true' if d.get('auto_parse')  else 'false')
-    set_setting('auto_chatgpt','true' if d.get('auto_chatgpt') else 'false')
-    set_setting('auto_draft',  'true' if d.get('auto_draft')   else 'false')
+    set_setting('auto_parse',   'true' if d.get('auto_parse')   else 'false')
+    set_setting('auto_chatgpt', 'true' if d.get('auto_chatgpt') else 'false')
+    set_setting('auto_draft',   'true' if d.get('auto_draft')   else 'false')
     return jsonify({'status':'ok','message':'Настройки автоматизации сохранены'})
 
 @app.route('/api/settings/dedup', methods=['POST'])
 @login_required
 def save_dedup():
     d = request.json
-    set_setting('dedup_by_url',  'true' if d.get('by_url')   else 'false')
-    set_setting('dedup_by_title','true' if d.get('by_title') else 'false')
+    set_setting('dedup_by_url',   'true' if d.get('by_url')   else 'false')
+    set_setting('dedup_by_title', 'true' if d.get('by_title') else 'false')
     return jsonify({'status':'ok','message':'Настройки антидубликатов сохранены'})
 
 # ===================== API — TELEGRAM =====================
@@ -322,7 +382,7 @@ def add_telegram():
         with db() as conn:
             cur = conn.cursor()
             cur.execute("""INSERT INTO telegram_channels (name,bot_token,chat_id,country_id,status)
-                           VALUES (%s,%s,%s,%s,'unknown') RETURNING id""",
+                VALUES (%s,%s,%s,%s,'unknown') RETURNING id""",
                 (d['name'],d['bot_token'],d['chat_id'],d.get('country_id') or None))
             return jsonify({'status':'ok','id':cur.fetchone()['id']})
     except Exception as e:
@@ -335,7 +395,7 @@ def delete_telegram(tid):
         with db() as conn:
             cur = conn.cursor()
             cur.execute("DELETE FROM telegram_channels WHERE id=%s",(tid,))
-        return jsonify({'status':'ok'})
+            return jsonify({'status':'ok'})
     except Exception as e:
         return jsonify({'status':'error','message':str(e)}), 400
 

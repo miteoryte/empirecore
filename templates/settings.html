@@ -63,7 +63,18 @@
       <button class="btn btn-primary btn-sm" onclick="openModal('modal-source')">+ Добавить</button>
     </div>
     <table class="data-table" id="sources-table">
-      <thead><tr><th>Название / RSS</th><th>Страна</th><th>Категория</th><th>Интервал</th><th>Макс.</th><th>Вкл</th><th></th></tr></thead>
+      <thead>
+        <tr>
+          <th>Название / RSS</th>
+          <th>Страна</th>
+          <th>Категория</th>
+          <th>Интервал</th>
+          <th>Макс.</th>
+          <th>Последний парс</th>
+          <th>Вкл</th>
+          <th></th>
+        </tr>
+      </thead>
       <tbody>
         {% for s in sources %}
         <tr id="source-row-{{ s.id }}">
@@ -73,8 +84,24 @@
           </td>
           <td>{{ s.country_name or '—' }}</td>
           <td>{{ s.category }}</td>
-          <td>{{ s.interval_min }} мин</td>
+          <td class="interval-cell {% if cfg.get('auto_parse')=='true' %}sync-frozen{% endif %}">
+            {{ s.interval_min }} мин
+            {% if cfg.get('auto_parse')=='true' %}
+            <svg class="freeze-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" title="Синхронизация активна">
+              <line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            {% endif %}
+          </td>
           <td>{{ s.max_news }}</td>
+          <td class="last-parse-cell">
+            {% if s.last_parsed_at %}
+              <span class="last-parse-time" title="{{ s.last_parsed_at }}">
+                {{ s.last_parsed_at.strftime('%d.%m %H:%M') if s.last_parsed_at else '—' }}
+              </span>
+            {% else %}
+              <span class="last-parse-never">—</span>
+            {% endif %}
+          </td>
           <td>
             <label class="toggle">
               <input type="checkbox" {% if s.enabled %}checked{% endif %} onchange="toggleSource({{ s.id }}, this)">
@@ -87,7 +114,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="empty-cell">Нет источников. Добавьте первый.</td></tr>
+        <tr><td colspan="8" class="empty-cell">Нет источников. Добавьте первый.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -162,10 +189,27 @@
     {% elif active_tab == 'automation' %}
     <div class="panel-header"><h3>Автоматизация</h3></div>
     <div class="form-stack">
-      <div class="toggle-row">
-        <div class="toggle-info"><strong>Автозапуск парсера</strong><span>Парсить источники автоматически по расписанию</span></div>
-        <label class="toggle"><input type="checkbox" id="auto-parse" {% if cfg.get('auto_parse')=='true' %}checked{% endif %}><span class="toggle-slider"></span></label>
+
+      <!-- Синхронизация парсера -->
+      <div class="toggle-row sync-toggle-row {% if cfg.get('auto_parse')=='true' %}sync-active{% endif %}" id="sync-toggle-row">
+        <div class="toggle-info">
+          <strong>Синхронизация парсера</strong>
+          <span>Все источники парсятся по единому расписанию. При включении индивидуальные интервалы источников замораживаются — управление переходит к глобальному расписанию.</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="auto-parse" {% if cfg.get('auto_parse')=='true' %}checked{% endif %} onchange="onSyncChange(this)">
+          <span class="toggle-slider"></span>
+        </label>
       </div>
+
+      <!-- Freeze notice -->
+      <div class="sync-freeze-notice {% if cfg.get('auto_parse')!='true' %}hidden{% endif %}" id="sync-freeze-notice">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v20M2 12h20M4.93 4.93l14.14 14.14M19.07 4.93L4.93 19.07"/>
+        </svg>
+        Индивидуальные интервалы источников заморожены — активна синхронизация
+      </div>
+
       <div class="toggle-row">
         <div class="toggle-info"><strong>Авто-отправка в ChatGPT</strong><span>Автоматически обрабатывать новые материалы</span></div>
         <label class="toggle"><input type="checkbox" id="auto-chatgpt" {% if cfg.get('auto_chatgpt')=='true' %}checked{% endif %}><span class="toggle-slider"></span></label>
@@ -295,7 +339,11 @@
             {% for c in countries_list %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
           </select>
         </div>
-        <div class="form-group"><label>Интервал (мин)</label><input type="number" class="form-input" id="s-interval" value="30" min="5"></div>
+        <div class="form-group">
+          <label>Интервал (мин)</label>
+          <input type="number" class="form-input" id="s-interval" value="30" min="5"
+            {% if cfg.get('auto_parse')=='true' %}disabled title="Заморожено синхронизацией"{% endif %}>
+        </div>
         <div class="form-group"><label>Макс. новостей</label><input type="number" class="form-input" id="s-maxnews" value="10" min="1"></div>
       </div>
 
@@ -461,8 +509,12 @@ function saveSource() {
   if (ptype !== 'html' && !data.rss_url) return showToast('Укажите RSS/API URL');
   const req = id ? apiPut('/api/sources/'+id, data) : apiPost('/api/sources', data);
   req.then(r => {
-    if (r.status==='ok') { showToast('Сохранено'); closeModal('modal-source'); setTimeout(()=>location.reload(),600); }
-    else showToast('Ошибка: '+r.message);
+    if (r.status==='ok') {
+      const msg = id ? 'Сохранено' : 'Источник добавлен — подтягиваю последние 10 статей...';
+      showToast(msg);
+      closeModal('modal-source');
+      setTimeout(()=>location.reload(),600);
+    } else showToast('Ошибка: '+r.message);
   });
 }
 
@@ -514,6 +566,18 @@ function savePrompt() {
 }
 
 // ---- Automation ----
+function onSyncChange(el) {
+  const row    = document.getElementById('sync-toggle-row');
+  const notice = document.getElementById('sync-freeze-notice');
+  if (el.checked) {
+    row.classList.add('sync-active');
+    notice.classList.remove('hidden');
+  } else {
+    row.classList.remove('sync-active');
+    notice.classList.add('hidden');
+  }
+}
+
 function saveAutomation() {
   apiPost('/api/settings/automation', {
     auto_parse: document.getElementById('auto-parse')?.checked,
@@ -553,7 +617,7 @@ function deleteTelegram(id) {
   });
 }
 
-// Reset modal-country form when opening fresh
+// Reset modal forms when opening fresh
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelector('[onclick="openModal(\'modal-country\')"]')?.addEventListener('click', () => {
     document.getElementById('modal-country-title').textContent='Добавить страну';
