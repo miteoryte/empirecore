@@ -401,6 +401,17 @@ def delete_telegram(tid):
 
 # ===================== API — NEWS =====================
 
+@app.route('/api/news/<int:nid>', methods=['DELETE'])
+@login_required
+def delete_news(nid):
+    try:
+        with db() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM news WHERE id=%s", (nid,))
+            return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 400
+
 @app.route('/api/news/<int:nid>/action', methods=['POST'])
 @login_required
 def news_action(nid):

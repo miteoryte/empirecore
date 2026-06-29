@@ -67,10 +67,11 @@
 
   <div class="bulk-actions" id="bulkBar" style="display:none;">
     <span class="bulk-count" id="bulkCount">0 выбрано</span>
+    <button class="btn btn-sm btn-ghost" id="btnSelectAll" onclick="toggleSelectAll()">Выбрать все</button>
     <button class="btn btn-sm btn-ghost" onclick="bulkAction('publish')">Опубликовать</button>
     <button class="btn btn-sm btn-ghost" onclick="bulkAction('reject')">Отклонить</button>
     <button class="btn btn-sm btn-ghost" onclick="bulkAction('regenerate')">Перегенерировать</button>
-    <button class="btn btn-sm btn-danger" onclick="bulkAction('delete')">Удалить</button>
+    <button class="btn btn-sm btn-danger" onclick="bulkDeleteSelected()">Удалить</button>
   </div>
 </div>
 
@@ -93,25 +94,39 @@
       <input type="checkbox" class="news-checkbox" value="{{ item.id }}" onchange="updateBulk()">
     </div>
 
+    {% if item.image_url %}
+    <div class="card-img-wrap">
+      <img class="card-img" src="{{ item.image_url }}" alt="" loading="lazy" onerror="this.parentElement.style.display='none'">
+    </div>
+    {% endif %}
+
     <div class="card-body">
       <div class="card-meta">
-        <span class="source-badge">{{ item.source }}</span>
-        <span class="country-tag">{{ item.country }}</span>
-        <span class="category-tag">{{ item.category }}</span>
+        <span class="source-badge">{{ item.source_name or '—' }}</span>
+        <span class="country-tag">{{ item.country_name or '—' }}</span>
         <span class="status-badge status-{{ item.status }}">
           {% if item.status == 'new' %}Новая
           {% elif item.status == 'ready' %}Готова
           {% elif item.status == 'draft' %}Черновик
           {% elif item.status == 'published' %}Опубликована
           {% elif item.status == 'rejected' %}Отклонена
+          {% else %}{{ item.status }}
           {% endif %}
         </span>
-        <span class="time-tag">{{ item.published_at }}</span>
+        <span class="time-tag">
+          {% if item.parsed_at %}
+            {{ item.parsed_at.strftime('%d.%m.%Y %H:%M') }}
+          {% else %}
+            —
+          {% endif %}
+        </span>
       </div>
 
       <div class="card-content">
         <div class="card-text">
-          <h3 class="card-title">{{ item.generated_title }}</h3>
+          <h3 class="card-title">
+            {% if item.generated_title %}{{ item.generated_title }}{% else %}{{ item.original_title }}{% endif %}
+          </h3>
           <p class="card-original">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
@@ -119,7 +134,9 @@
             </svg>
             <a href="{{ item.original_url }}" target="_blank">{{ item.original_title }}</a>
           </p>
+          {% if item.generated_text %}
           <p class="card-excerpt">{{ item.generated_text[:200] }}{% if item.generated_text|length > 200 %}...{% endif %}</p>
+          {% endif %}
         </div>
       </div>
 
@@ -127,15 +144,20 @@
       <div class="card-editor" id="editor-{{ item.id }}" style="display:none;">
         <div class="editor-field">
           <label>Заголовок</label>
-          <input type="text" class="editor-input" value="{{ item.generated_title }}" id="title-{{ item.id }}">
+          <input type="text" class="editor-input" value="{{ item.generated_title or item.original_title }}" id="title-{{ item.id }}">
         </div>
         <div class="editor-field">
           <label>Текст</label>
-          <textarea class="editor-textarea" id="text-{{ item.id }}" rows="6">{{ item.generated_text }}</textarea>
+          <textarea class="editor-textarea" id="text-{{ item.id }}" rows="6">{{ item.generated_text or '' }}</textarea>
         </div>
         <div class="editor-field">
           <label>Изображение</label>
-          <input type="text" class="editor-input" placeholder="URL изображения или загрузить файл">
+          <div class="img-editor-row">
+            <input type="text" class="editor-input" id="img-{{ item.id }}" placeholder="URL изображения" value="{{ item.image_url or '' }}">
+            {% if item.image_url %}
+            <img class="img-preview" src="{{ item.image_url }}" alt="" onerror="this.style.display='none'">
+            {% endif %}
+          </div>
         </div>
       </div>
 
@@ -155,6 +177,13 @@
         </button>
         <button class="btn btn-sm btn-ghost" onclick="newsAction({{ item.id }}, 'draft')">Черновик</button>
         <button class="btn btn-sm btn-danger-ghost" onclick="newsAction({{ item.id }}, 'reject')">Отклонить</button>
+        <button class="btn btn-sm btn-danger-ghost" onclick="deleteNews({{ item.id }})">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+          Удалить
+        </button>
         <button class="btn btn-sm btn-primary" onclick="newsAction({{ item.id }}, 'publish')">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -170,31 +199,128 @@
 
 {% block scripts %}
 <script>
+let allSelected = false;
+
 function toggleEditor(id) {
   const ed = document.getElementById('editor-' + id);
   ed.style.display = ed.style.display === 'none' ? 'block' : 'none';
 }
 
 function newsAction(id, action) {
-  const labels = {publish: 'Опубликовано', draft: 'Сохранено как черновик', reject: 'Отклонено', regenerate: 'Отправлено на перегенерацию'};
+  const labels = {
+    publish: 'Опубликовано',
+    draft: 'Сохранено как черновик',
+    reject: 'Отклонено',
+    regenerate: 'Отправлено на перегенерацию'
+  };
   fetch('/api/news/' + id + '/action', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({action})
-  }).then(() => showToast(labels[action] || 'Готово'));
+  }).then(r => r.json()).then(data => {
+    if (data.status === 'ok') {
+      showToast(labels[action] || 'Готово');
+      // Update status badge
+      const card = document.getElementById('card-' + id);
+      if (card) {
+        const badge = card.querySelector('.status-badge');
+        if (badge && data.new_status) {
+          const statusLabels = {
+            published: 'Опубликована',
+            draft: 'Черновик',
+            rejected: 'Отклонена',
+            new: 'Новая',
+            ready: 'Готова'
+          };
+          badge.className = 'status-badge status-' + data.new_status;
+          badge.textContent = statusLabels[data.new_status] || data.new_status;
+        }
+      }
+    } else {
+      showToast('Ошибка: ' + (data.message || 'неизвестная'));
+    }
+  }).catch(() => showToast('Ошибка соединения'));
+}
+
+function deleteNews(id) {
+  if (!confirm('Удалить этот материал?')) return;
+  fetch('/api/news/' + id, {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'}
+  }).then(r => r.json()).then(data => {
+    if (data.status === 'ok') {
+      const card = document.getElementById('card-' + id);
+      if (card) {
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(-10px)';
+        card.style.transition = 'opacity .25s, transform .25s';
+        setTimeout(() => card.remove(), 260);
+      }
+      showToast('Удалено');
+    } else {
+      showToast('Ошибка удаления: ' + (data.message || ''));
+    }
+  }).catch(() => showToast('Ошибка соединения'));
 }
 
 function updateBulk() {
+  const all = document.querySelectorAll('.news-checkbox');
   const checked = document.querySelectorAll('.news-checkbox:checked');
   const bar = document.getElementById('bulkBar');
   const count = document.getElementById('bulkCount');
+  const btnAll = document.getElementById('btnSelectAll');
   bar.style.display = checked.length > 0 ? 'flex' : 'none';
   count.textContent = checked.length + ' выбрано';
+  allSelected = checked.length === all.length;
+  btnAll.textContent = allSelected ? 'Снять всё' : 'Выбрать все';
+}
+
+function toggleSelectAll() {
+  const all = document.querySelectorAll('.news-checkbox');
+  allSelected = !allSelected;
+  all.forEach(cb => cb.checked = allSelected);
+  updateBulk();
 }
 
 function bulkAction(action) {
-  const ids = [...document.querySelectorAll('.news-checkbox:checked')].map(c => c.value);
-  showToast('Действие "' + action + '" применено к ' + ids.length + ' материалам');
+  const ids = [...document.querySelectorAll('.news-checkbox:checked')].map(c => parseInt(c.value));
+  if (!ids.length) return;
+  const labels = {publish: 'Опубликовано', draft: 'Сохранено', reject: 'Отклонено', regenerate: 'Перегенерация запущена'};
+  Promise.all(ids.map(id =>
+    fetch('/api/news/' + id + '/action', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action})
+    })
+  )).then(() => {
+    showToast((labels[action] || action) + ': ' + ids.length + ' шт.');
+    setTimeout(() => location.reload(), 1200);
+  });
+}
+
+function bulkDeleteSelected() {
+  const ids = [...document.querySelectorAll('.news-checkbox:checked')].map(c => parseInt(c.value));
+  if (!ids.length) return;
+  if (!confirm('Удалить ' + ids.length + ' материал(ов)?')) return;
+  Promise.all(ids.map(id =>
+    fetch('/api/news/' + id, {method: 'DELETE', headers: {'Content-Type': 'application/json'}})
+  )).then(() => {
+    ids.forEach(id => {
+      const card = document.getElementById('card-' + id);
+      if (card) card.remove();
+    });
+    showToast('Удалено: ' + ids.length + ' шт.');
+    document.getElementById('bulkBar').style.display = 'none';
+  }).catch(() => showToast('Ошибка удаления'));
+}
+
+function bulkPublish() {
+  const checked = document.querySelectorAll('.news-checkbox:checked');
+  if (checked.length === 0) {
+    showToast('Выберите материалы для публикации');
+    return;
+  }
+  bulkAction('publish');
 }
 
 function instantParse() {
@@ -217,8 +343,12 @@ function instantParse() {
     });
 }
 
-function bulkPublish() {
-  showToast('Выберите материалы для публикации');
-}
+// Show bulk bar also when clicking a checkbox for the first time
+document.addEventListener('DOMContentLoaded', () => {
+  // Show "Select all" button always visible above list as helper
+  document.querySelectorAll('.news-checkbox').forEach(cb => {
+    cb.addEventListener('change', updateBulk);
+  });
+});
 </script>
 {% endblock %}
